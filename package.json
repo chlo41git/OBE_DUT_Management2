@@ -1,0 +1,21 @@
+{
+  "name": "obe-dut-management-v04",
+  "private": true,
+  "version": "0.4.0",
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w @obe/backend",
+    "dev:frontend": "npm run dev -w @obe/frontend",
+    "build": "npm run build -w @obe/shared && npm run build -w @obe/backend && npm run build -w @obe/frontend",
+    "db:check": "npm run db:check -w @obe/backend",
+    "db:generate": "npm run db:generate -w @obe/backend",
+    "db:migrate": "npm run db:migrate -w @obe/backend",
+    "db:deploy": "npm run db:deploy -w @obe/backend",
+    "db:seed": "npm run db:seed -w @obe/backend",
+    "db:studio": "npm run db:studio -w @obe/backend"
+  }
+}

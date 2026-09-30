@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBE DUT 儲位管理系統 POC v0.1</title>
+<style>
+:root{
+  --bg:#f1f5f9; --panel:#ffffff; --ink:#0f172a; --ink2:#475569; --ink3:#94a3b8;
+  --line:#e2e8f0; --nav:#0b1727; --nav2:#132437; --accent:#10b981; --accent-d:#059669;
+  --blue:#2563eb; --amber:#f59e0b; --red:#dc2626; --violet:#7c3aed; --cyan:#0891b2;
+  --shadow:0 1px 2px rgba(15,23,42,.06),0 4px 14px rgba(15,23,42,.06);
+  --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{background:var(--bg);color:var(--ink);
+  font-family:"Segoe UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",system-ui,sans-serif;
+  font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ---------- sidebar ---------- */
+.side{width:216px;flex:0 0 216px;background:var(--nav);color:#cbd5e1;display:flex;flex-direction:column}
+.brand{padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.brand h1{margin:0;font-size:15px;color:#fff;letter-spacing:.3px}
+.brand span{font-size:11px;color:#64748b;font-family:var(--mono)}
+.nav{flex:1;overflow-y:auto;padding:8px 0}
+.nav .grp{font-size:10.5px;color:#475569;letter-spacing:1.2px;padding:12px 16px 6px;text-transform:uppercase}
+.nav a{display:flex;align-items:center;gap:9px;padding:8px 16px;color:#cbd5e1;text-decoration:none;font-size:13.5px;border-left:3px solid transparent}
+.nav a:hover{background:var(--nav2);color:#fff}
+.nav a.on{background:var(--nav2);color:#fff;border-left-color:var(--accent)}
+.nav a .ic{width:18px;text-align:center;font-size:14px;opacity:.9}
+.nav a .bdg{margin-left:auto;background:var(--red);color:#fff;border-radius:9px;padding:0 6px;font-size:10.5px;font-weight:700}
+.sidefoot{padding:10px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#64748b}
+
+/* ---------- main ---------- */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:52px;flex:0 0 52px;background:#fff;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;padding:0 20px}
+.top h2{margin:0;font-size:16px;font-weight:600}
+.top .sub{color:var(--ink3);font-size:12px}
+.top .right{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink2)}
+.chip{display:inline-flex;align-items:center;gap:5px;background:#f8fafc;border:1px solid var(--line);
+  border-radius:999px;padding:3px 10px;font-size:11.5px;color:var(--ink2)}
+.chip b{color:var(--ink)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block}
+.view{flex:1;overflow-y:auto;padding:18px 20px 40px}
+.page{display:none}.page.on{display:block}
+
+/* ---------- generic ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
+.card>h3{margin:0;padding:12px 16px;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:600;
+  display:flex;align-items:center;gap:8px}
+.card>h3 .hint{margin-left:auto;font-weight:400;font-size:11.5px;color:var(--ink3)}
+.card .bd{padding:14px 16px}
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:1180px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi .lb{font-size:11.5px;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.kpi .vl{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .ft{font-size:11px;color:var(--ink3)}
+.kpi.warn .vl{color:var(--amber)}.kpi.bad .vl{color:var(--red)}.kpi.ok .vl{color:var(--accent-d)}
+.bar{height:6px;border-radius:4px;background:#e2e8f0;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bar i.hi{background:var(--red)}.bar i.md{background:var(--amber)}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-weight:600;color:var(--ink2);background:#f8fafc;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;z-index:1}
+td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+tr:hover td{background:#f8fafc}
+.mono{font-family:var(--mono);font-size:12px;letter-spacing:.2px}
+.tag{display:inline-block;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid transparent}
+.t-gray{background:#f1f5f9;color:#475569;border-color:#e2e8f0}
+.t-green{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+.t-blue{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+.t-amber{background:#fffbeb;color:#b45309;border-color:#fde68a}
+.t-red{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+.t-violet{background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe}
+.t-cyan{background:#ecfeff;color:#0e7490;border-color:#a5f3fc}
+.btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:6px 12px;font-size:12.5px;font-weight:500}
+.btn:hover{background:#f8fafc}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.btn.pri:hover{background:var(--accent-d)}
+.btn.dk{background:var(--nav);border-color:var(--nav);color:#fff}.btn.dk:hover{background:var(--nav2)}
+.btn.dgr{background:#fff;border-color:#fecaca;color:var(--red)}.btn.dgr:hover{background:#fef2f2}
+.btn.sm{padding:3px 9px;font-size:11.5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+input[type=text],input[type=number],input[type=datetime-local],select,textarea{
+  border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:#fff;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid #bbf7d0;outline-offset:-1px;border-color:var(--accent)}
+label.f{display:block;font-size:11.5px;color:var(--ink2);margin:0 0 4px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--ink3)}
+.small{font-size:11.5px}
+
+/* ---------- scan console ---------- */
+.scan{display:grid;grid-template-columns:minmax(380px,1fr) 1.15fr;gap:14px}
+@media(max-width:1100px){.scan{grid-template-columns:1fr}}
+.steps{display:flex;gap:0;margin-bottom:12px}
+.step{flex:1;padding:8px 10px;background:#f8fafc;border:1px solid var(--line);border-right:none;font-size:12px;color:var(--ink3)}
+.step:last-child{border-right:1px solid var(--line);border-radius:0 8px 8px 0}
+.step:first-child{border-radius:8px 0 0 8px}
+.step.on{background:var(--nav);border-color:var(--nav);color:#fff}
+.step.done{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.step b{display:block;font-size:13px}
+.scanbox{border:2px dashed #cbd5e1;border-radius:10px;background:#fff;padding:16px;text-align:center}
+.scanbox.act{border-color:var(--accent);background:#f0fdf4}
+.scanbox .cap{font-size:12px;color:var(--ink2);margin-bottom:8px}
+.scanbox input{font-size:22px;font-family:var(--mono);text-align:center;padding:12px;letter-spacing:1px;font-weight:600}
+.bigloc{font-family:var(--mono);font-size:46px;font-weight:800;letter-spacing:1px;line-height:1.1;color:#0f172a}
+.bigloc small{display:block;font-family:inherit;font-size:14px;font-weight:600;color:var(--ink2);letter-spacing:0}
+.locpanel{border-radius:10px;padding:18px;text-align:center;border:1px solid var(--line);background:linear-gradient(180deg,#f8fafc,#fff)}
+.locpanel.go{border-color:#6ee7b7;background:linear-gradient(180deg,#ecfdf5,#fff)}
+.locpanel.stop{border-color:#fecaca;background:linear-gradient(180deg,#fef2f2,#fff)}
+.msg{border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:10px;border:1px solid}
+.msg.ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+.msg.warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+.msg.err{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+.msg.info{background:#eff6ff;border-color:#bfdbfe;color:#1e40af}
+.msg b{display:block;margin-bottom:2px}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:4px 10px;font-size:12.5px}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:500}
+.sim{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.sim button{border:1px dashed #cbd5e1;background:#fff;border-radius:6px;padding:4px 8px;font-size:11px;font-family:var(--mono);color:var(--ink2)}
+.sim button:hover{border-color:var(--accent);color:var(--accent-d)}
+
+/* ---------- rack map ---------- */
+.rackwrap{display:grid;grid-template-columns:220px 1fr;gap:14px}
+@media(max-width:1000px){.rackwrap{grid-template-columns:1fr}}
+.racklist{max-height:560px;overflow:auto}
+.rackitem{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid #f1f5f9;cursor:pointer;font-size:12.5px}
+.rackitem:hover{background:#f8fafc}
+.rackitem.on{background:#ecfdf5}
+.rackitem .nm{font-family:var(--mono);font-weight:600}
+.rackitem .mini{margin-left:auto;width:52px;height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden}
+.rackitem .mini i{display:block;height:100%;background:var(--accent)}
+.shelf{margin-bottom:8px}
+.shelf .lbl{font-size:11px;color:var(--ink3);font-family:var(--mono);margin-bottom:3px}
+.slots{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.slot{border:1px solid var(--line);border-radius:7px;padding:7px 8px;min-height:56px;cursor:pointer;background:#fff;font-size:11px;overflow:hidden}
+.slot:hover{border-color:var(--nav)}
+.slot .p{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+.slot .s{font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:-.2px}
+.slot .m{color:var(--ink2);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot.empty{background:#f8fafc;border-style:dashed}
+.slot.occ{background:#f0fdf4;border-color:#bbf7d0}
+.slot.stale{background:#fffbeb;border-color:#fde68a}
+.slot.hold{background:#eff6ff;border-color:#bfdbfe}
+.slot.confl{background:#fef2f2;border-color:#fecaca}
+.slot.hl{outline:3px solid var(--violet);outline-offset:1px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink2)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:4px;vertical-align:-1px;border:1px solid var(--line)}
+
+/* ---------- drawer / modal ---------- */
+.mask{position:fixed;inset:0;background:rgba(15,23,42,.42);display:none;z-index:40}
+.mask.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:520px;max-width:94vw;background:#fff;z-index:50;
+  transform:translateX(102%);transition:transform .2s ease;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(15,23,42,.15)}
+.drawer.on{transform:none}
+.drawer .dh{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.drawer .dh h4{margin:0;font-size:15px}
+.drawer .db{flex:1;overflow-y:auto;padding:16px 18px}
+.modal{position:fixed;z-index:60;left:50%;top:50%;transform:translate(-50%,-50%);width:520px;max-width:94vw;
+  background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(15,23,42,.3);display:none}
+.modal.on{display:block}
+.modal .mh{padding:14px 18px;border-bottom:1px solid var(--line);font-weight:600}
+.modal .mb{padding:16px 18px;max-height:64vh;overflow:auto}
+.modal .mf{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.tl{list-style:none;margin:0;padding:0;font-size:12.5px}
+.tl li{position:relative;padding:0 0 14px 18px;border-left:2px solid var(--line)}
+.tl li:last-child{border-left-color:transparent}
+.tl li::before{content:"";position:absolute;left:-5px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.tl .tm{color:var(--ink3);font-size:11px;font-family:var(--mono)}
+.toast{position:fixed;right:20px;bottom:20px;z-index:80;display:flex;flex-direction:column;gap:8px}
+.toast div{background:var(--nav);color:#fff;padding:10px 14px;border-radius:8px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast div.err{background:var(--red)}.toast div.ok{background:var(--accent-d)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.filters input,.filters select{width:auto;min-width:130px}
+.tblwrap{max-height:520px;overflow:auto;border-top:1px solid var(--line)}
+.spec h4{margin:18px 0 6px;font-size:13.5px}
+.spec p,.spec li{font-size:12.5px;color:var(--ink2)}
+.spec code{font-family:var(--mono);background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:11.5px;color:#0f172a}
+.qr{width:46px;height:46px;image-rendering:pixelated;border:1px solid var(--line);border-radius:4px;background:#fff}
+</style>
+</head>
+<body>
+<style>
+/* v0.2 追加 */
+.slot.block{background:#f1f5f9;border-color:#94a3b8;border-style:dashed}
+.tk{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff}
+.tk.open{border-left:3px solid var(--red)}
+.tk.closed{border-left:3px solid var(--accent);opacity:.72}
+.tk .hd{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.tk .cd{margin-left:auto;font-family:var(--mono);font-size:12px}
+.tk .cd.late{color:var(--red);font-weight:700}
+.rowbtn{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.qbadge{background:var(--amber);color:#fff;border-radius:9px;padding:0 7px;font-size:10.5px;font-weight:700;margin-left:6px}
+.swt{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid #f1f5f9}
+.swt input{width:auto;margin-top:3px}
+.swt .d{font-size:11.5px;color:var(--ink3)}
+.offline .top{background:#fff7ed}
+.bigloc.sm{font-size:34px}
+</style>
+<style>
+/* v0.3 追加：燈號地圖 */
+.findres{font-size:12.5px;color:var(--ink2)}
+.findres b{color:var(--ink)}
+.findres .no{color:var(--red)}
+.led{width:13px;height:13px;border-radius:50%;display:inline-block;flex:0 0 auto}
+.led-occ{background:radial-gradient(circle at 32% 30%,#fca5a5,#dc2626);box-shadow:0 0 5px rgba(220,38,38,.7)}
+.led-empty{background:radial-gradient(circle at 32% 30%,#86efac,#16a34a);box-shadow:0 0 5px rgba(22,163,74,.55)}
+.led-block{background:radial-gradient(circle at 32% 30%,#e2e8f0,#94a3b8)}
+.cell{border:1px solid var(--line);border-radius:8px;padding:6px 8px;display:flex;gap:8px;align-items:center;
+  background:#fff;cursor:pointer;min-height:50px}
+.cell:hover{border-color:var(--nav)}
+.cell .info{min-width:0;flex:1}
+.cell .pn{font-family:var(--mono);font-size:10px;color:var(--ink3)}
+.cell .sn{font-family:var(--mono);font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell .ms{font-size:10px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell.hit{outline:3px solid #7c3aed;outline-offset:2px;background:#faf5ff;animation:pl 1.1s ease-in-out infinite}
+@keyframes pl{0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,.5)}50%{box-shadow:0 0 0 9px rgba(124,58,237,0)}}
+.shelfrow{display:grid;grid-template-columns:56px repeat(4,1fr);gap:6px;align-items:center;margin-bottom:6px}
+.shelfrow .lv{font-family:var(--mono);font-size:11px;color:var(--ink3);text-align:right}
+.cartgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(136px,1fr));gap:9px}
+.cartcard{border:1px solid var(--line);border-radius:10px;padding:8px;background:#fff;cursor:pointer}
+.cartcard:hover{border-color:var(--nav);box-shadow:var(--shadow)}
+.cartcard.on{border-color:var(--accent);background:#f0fdf4}
+.cartcard.hasHit{border-color:#7c3aed;box-shadow:0 0 0 2px rgba(124,58,237,.18)}
+.cartcard .hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.cartcard .nm{font-family:var(--mono);font-weight:700;font-size:12px}
+.cartcard .rt{margin-left:auto;font-size:10px;color:var(--ink3);font-family:var(--mono)}
+.cartcard .sub{font-size:9.5px;color:var(--ink3);line-height:1.35;margin-bottom:5px}
+.mini{display:grid;grid-template-columns:15px repeat(4,1fr);gap:2px;align-items:center}
+.mini i{width:9px;height:9px;border-radius:50%;display:block;justify-self:center}
+.mini .hl{font-family:var(--mono);font-size:8px;color:var(--ink3);text-align:center;line-height:1}
+.mini .lv{font-family:var(--mono);font-size:8px;color:var(--ink3);text-align:right;padding-right:1px;line-height:1}
+.mini i.hitdot{outline:2px solid #7c3aed;outline-offset:1px;transform:scale(1.25);animation:pl 1.1s ease-in-out infinite}
+.hitrow{background:#faf5ff!important}
+.undo{display:flex;align-items:center;gap:10px;background:var(--nav);color:#fff;border-radius:8px;padding:10px 14px;font-size:12.5px}
+.undo b{color:#fff}
+.undo .btn{color:var(--ink)}
+.undo .btn.pri{color:#fff}
+.modebtn.on{background:var(--nav);border-color:var(--nav);color:#fff}
+</style>
+<style>
+/* v0.4 追加：一維條碼標籤、區域標籤 */
+.bars{display:inline-block;background:#fff;padding:6px 8px;border:1px solid #e2e8f0;border-radius:4px;line-height:0}
+.bars i{display:inline-block;background:#0f172a;vertical-align:bottom}
+.areaTag{font-family:var(--mono);font-weight:700;font-size:11px;padding:1px 7px;border-radius:4px;letter-spacing:.5px}
+.areaTag.wip{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.areaTag.fin{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}
+.cartcard .nm{font-size:12.5px}
+.lblcard{border:1px dashed #cbd5e1;border-radius:8px;padding:14px;background:#fff;display:flex;gap:16px;align-items:center}
+.lblcard .zh{font-size:16px;font-weight:700;letter-spacing:1px;white-space:nowrap}
+.lblcard>div:last-child{min-width:230px}
+#modal .mb .lblcard{overflow:auto}
+</style>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <h1>OBE DUT 儲位管理系統</h1>
+      <span>EQM1 Storage Mgmt · POC v0.4</span>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="grp">管理 Management</div>
+      <a data-p="in"><span class="ic">↧</span>入庫上架 Check-in</a>
+      <a data-p="out"><span class="ic">↥</span>取機出庫 Check-out</a>
+      <a data-p="map"><span class="ic">▦</span>找機台與儲位地圖</a>
+      <div class="grp">系統 System</div>
+      <a data-p="dash" class="on"><span class="ic">▤</span>戰情儀表板</a>
+      <a data-p="log"><span class="ic">≡</span>事件紀錄</a>
+    </nav>
+    <div class="sidefoot">條碼格式 <b>WIP／FIN-台車-層-機位</b><br>Demo 資料 · 重整即重置</div>
+  </aside>
+
+  <div class="main">
+    <header class="top" id="topbar">
+      <h2 id="ttl">戰情儀表板</h2>
+      <span class="sub" id="sub">OBE 區 DUT 即時在庫概況</span>
+      <div class="right">
+        <span class="chip">刷取站 <b>OBE-STN01</b></span>
+        <span class="chip">操作員 <b id="opName">A12345 陳志明</b></span>
+        <span class="chip" id="clock">--:--</span>
+      </div>
+    </header>
+    <div class="view">
+
+      <!-- 入庫：先刷櫃位條碼，再刷 S/N -->
+      <section class="page" id="p-in">
+        <div class="steps" id="inSteps">
+          <div class="step on"><b>Step 1</b>刷櫃位條碼（人員自選空位）</div>
+          <div class="step"><b>Step 2</b>刷機台 S/N</div>
+          <div class="step"><b>Step 3</b>綁定完成</div>
+        </div>
+        <div class="scan">
+          <div>
+            <div class="card" style="margin-bottom:14px">
+              <h3>刷取區 <span class="hint">先櫃位、後機台 · 2 秒內重複刷自動忽略</span></h3>
+              <div class="bd">
+                <div class="scanbox act" id="inBox">
+                  <div class="cap" id="inCap">請先刷「櫃位條碼」</div>
+                  <input type="text" id="inScan" placeholder="等待掃描…" autocomplete="off">
+                </div>
+                <div class="row" style="margin-top:10px">
+                  <button class="btn" onclick="manualSlot('in')">標籤破損，手動輸入儲位</button>
+                  <button class="btn" onclick="inReset()">重來</button>
+                </div>
+              </div>
+            </div>
+            <div class="card"><h3>機台資訊 <span class="hint">來源：SL2.0 unit 主檔</span></h3>
+              <div class="bd" id="inInfo"><span class="muted small">尚未刷入機台</span></div></div>
+          </div>
+          <div>
+            <div id="inMsg"></div>
+            <div class="locpanel" id="inLoc">
+              <div class="muted small">目標櫃位 Target Location</div>
+              <div class="bigloc">— — —<small>請先刷櫃位條碼</small></div>
+            </div>
+            <div class="card" style="margin-top:14px"><h3>本班已入庫 <span class="hint" id="inShiftN">0 筆</span></h3>
+              <div class="tblwrap" style="max-height:210px" id="inShift"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 出庫：只刷櫃位條碼 -->
+      <section class="page" id="p-out">
+        <div class="steps" id="outSteps">
+          <div class="step on"><b>Step 1</b>刷櫃位條碼</div>
+          <div class="step"><b>Step 2</b>確認取出（二次確認）</div>
+          <div class="step"><b>Step 3</b>釋放完成</div>
+        </div>
+        <div class="scan">
+          <div>
+            <div class="card" style="margin-bottom:14px">
+              <h3>刷取區 <span class="hint">刷櫃位條碼 → 二次確認後才釋放</span></h3>
+              <div class="bd">
+                <div class="scanbox act" id="outBox">
+                  <div class="cap" id="outCap">請刷「櫃位條碼」釋放該格</div>
+                  <input type="text" id="outScan" placeholder="等待掃描…" autocomplete="off">
+                </div>
+                <div class="row" style="margin-top:10px">
+                  <button class="btn" onclick="manualSlot('out')">標籤破損，手動輸入儲位</button>
+                  <button class="btn" onclick="outReset()">重來</button>
+                </div>
+              </div>
+            </div>
+            <div class="card"><h3>取出的機台 <span class="hint">含 E-Safe Launch OBE Issue</span></h3>
+              <div class="bd" id="outInfo"><span class="muted small">尚未刷取</span></div></div>
+          </div>
+          <div>
+            <div id="outMsg"></div>
+            <div class="locpanel" id="outLoc">
+              <div class="muted small">釋放的櫃位 Released Location</div>
+              <div class="bigloc">— — —<small>刷櫃位條碼，確認後才釋放</small></div>
+            </div>
+            <div class="card" style="margin-top:14px"><h3>本班已出庫 <span class="hint" id="outShiftN">0 筆</span></h3>
+              <div class="tblwrap" style="max-height:210px" id="outShift"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 找機台與儲位地圖 -->
+      <section class="page" id="p-map">
+        <div class="card" style="margin-bottom:12px"><div class="bd">
+          <div class="filters">
+            <input type="text" id="fKw" placeholder="輸入 S/N 或後四碼，按 Enter 直接定位…" style="min-width:290px">
+            <button class="btn pri" onclick="doFind()">查詢定位</button>
+            <button class="btn" onclick="clearFind()">清除</button>
+            <span class="findres" id="findCnt"></span>
+            <span class="row" style="margin-left:auto">
+              <button class="btn modebtn on" id="btnAll" onclick="setMode('ALL')">全區總覽</button>
+              <button class="btn modebtn" id="btnOne" onclick="setMode('ONE')">單台車</button>
+              <button class="btn pri" onclick="newRack()">＋ 新增台車</button>
+            </span>
+          </div>
+          <div class="legend" style="margin:0">
+            <span><i class="led led-occ" style="width:11px;height:11px"></i>紅燈：已使用</span>
+            <span><i class="led led-empty" style="width:11px;height:11px"></i>綠燈：空位</span>
+            <span><i class="led led-block" style="width:11px;height:11px"></i>灰燈：停用（治具盤／破損）</span>
+            <span style="color:#7c3aed"><b>紫框閃爍</b>＝查詢命中的機台位置</span>
+            <span style="margin-left:auto" class="muted">燈號位置＝實際架位：左起第 1 機位 → 第 4 機位，由上而下第 1 層 → 第 11 層</span>
+          </div>
+        </div></div>
+        <div class="card"><h3 id="mapTtl">全區總覽</h3><div class="bd" id="mapView"></div></div>
+      </section>
+
+      <!-- 儀表板 -->
+      <section class="page on" id="p-dash">
+        <div class="grid g4" style="margin-bottom:14px" id="kpis"></div>
+        <div class="grid g2" style="margin-bottom:14px">
+          <div class="card"><h3>區域佔用率 <span class="hint">WIP 未驗／FIN 已驗</span></h3><div class="bd" id="zoneUtil"></div></div>
+          <div class="card"><h3>今日作業量與刷取品質 <span class="hint">Throughput / Scan Quality</span></h3><div class="bd" id="todayOps"></div></div>
+        </div>
+        <div class="card"><h3>最近作業 <span class="hint">Recent Events</span></h3><div class="tblwrap" id="recentTbl"></div></div>
+      </section>
+
+      <!-- 事件 -->
+      <section class="page" id="p-log">
+        <div class="card"><h3>事件紀錄 <span class="hint">Audit Trail · 不可刪改</span></h3>
+          <div class="bd"><div class="filters">
+            <select id="gType" style="max-width:190px"><option value="">全部事件</option></select>
+            <input type="text" id="gKw" placeholder="S/N 或儲位">
+            <button class="btn pri" onclick="renderLog()">查詢</button>
+            <span class="muted small" id="gCnt"></span></div></div>
+          <div class="tblwrap" id="logTbl"></div></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mask" onclick="closeAll()"></div>
+<div class="drawer" id="drawer"><div class="dh"><h4 id="drTtl">機台明細</h4>
+  <button class="btn sm" style="margin-left:auto" onclick="closeAll()">關閉</button></div>
+  <div class="db" id="drBody"></div></div>
+<div class="modal" id="modal"><div class="mh" id="mdTtl">確認</div><div class="mb" id="mdBody"></div>
+  <div class="mf" id="mdFoot"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+/* =========================================================
+   OBE DUT 儲位管理系統 POC v0.4
+   v0.4：儲位編碼改為與現場【已印出的一維條碼】完全一致
+         區域(WIP/FIN) - 台車號(2碼) - 層數(2碼) - 機位(2碼)   例：FIN-04-01-04
+         條碼為 1D Code128，標籤中文面為「已驗／未驗，04臺車，01層，04機位」
+   流程：入庫＝先刷櫃位條碼 → 再刷 S/N（自由選空位）；出庫＝刷櫃位條碼 → 二次確認 → 釋放
+   儲位三狀態：EMPTY / OCCUPIED / BLOCKED（綠／紅／灰）
+   機台狀態：NEW / IN / OUT / LEFT
+   ========================================================= */
+let seed=20260905;
+function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
+function pick(a){return a[Math.floor(rnd()*a.length)];}
+function ri(a,b){return a+Math.floor(rnd()*(b-a+1));}
+function wpick(m){const t=Object.values(m).reduce((a,b)=>a+b,0);let r=rnd()*t;
+  for(const k in m){r-=m[k];if(r<=0)return k;}return Object.keys(m)[0];}
+const pad=(n,l=2)=>String(n).padStart(l,'0');
+const NOW=new Date(2026,8,4,10,30,0);
+function dstr(d){return d.getFullYear()+'/'+pad(d.getMonth()+1)+'/'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());}
+function days(d){return Math.max(0,Math.floor((NOW-d)/86400000));}
+function addD(d,n){return new Date(d.getTime()+n*86400000);}
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const CFG={levels:11,pos:4,staleDays:30,dedupSec:2};
+
+/* DUT 狀態 → 沿用現場看板用語 */
+const DSTAT=['待測 EQM1','EQM1 已驗待放行','EQM1 已刷出待 Re SWDL','待 JQE 判定','待 RD 分析','待維修','待報廢'];
+const DSTAT_W={'待測 EQM1':20,'EQM1 已驗待放行':20,'EQM1 已刷出待 Re SWDL':15,'待 JQE 判定':15,'待 RD 分析':10,'待維修':12,'待報廢':8};
+const DSTAT_TAG={'待測 EQM1':'t-blue','EQM1 已驗待放行':'t-green','EQM1 已刷出待 Re SWDL':'t-cyan','待 JQE 判定':'t-amber','待 RD 分析':'t-violet','待維修':'t-red','待報廢':'t-gray'};
+
+/* ====== v0.4 區域：現場條碼只有兩區 ====== */
+const FIN_STAT=['EQM1 已驗待放行','EQM1 已刷出待 Re SWDL'];
+const AREAS=[
+  {a:'WIP',zh:'未驗',name:'在製區（未驗）',carts:24,racks:[],
+   desc:'待測 EQM1、待 JQE 判定、待 RD 分析、待維修、待報廢'},
+  {a:'FIN',zh:'已驗',name:'已驗區',carts:12,racks:[],
+   desc:'EQM1 已驗待放行、EQM1 已刷出待 Re SWDL_IN'}
+];
+const areaOfCode=c=>c.slice(0,3);
+const areaObj=a=>AREAS.find(x=>x.a===a)||AREAS[0];
+const areaName=a=>areaObj(a).name;
+const areaZh=a=>areaObj(a).zh;
+function areaTag(a){return '<span class="areaTag '+a.toLowerCase()+'">'+a+'</span>';}
+
+const PROJECTS=['Slate','Blade14','Kevel','Sunfire'];
+const MODELS={Slate:['SLT-14X','SLT-16P'],Blade14:['BLD-14A','BLD-14B'],Kevel:['KVL-13S','KVL-15G'],Sunfire:['SNF-14U']};
+const PHASES=['EVT','DVT','PVT','MP'];
+const OWNERS=['BIOS','EE','ME','Thermal','SW','JQE','PQE'];
+const EMPS=[['A12345','陳志明','OP'],['A23456','林佩君','OP'],['B34567','王建宏','JQE'],['B45678','張雅琪','組長'],['C56789','李冠廷','OP']];
+const BLOCK_RSN=['泡棉治具盤佔位（空盤）','該層結構變形停用','暫借放治具備品'];
+const ISSUE_POOL=[
+ ['Dell Logo edges appear jagged when boot up the unit','Issue follow BIOS 0.2.24 and VNP after flash BIOS to 0.2.34','BIOS 0.2.34 Intel RC FW update can fix','BIOS'],
+ ['The daylight saving time is incorrect in the CMOS page','System setting with Winter time caused the issue','Change system setting to Daylight saving time','BIOS'],
+ ['Touchpad no response after S3 resume','Driver timing issue on PS/2 init','Update TP FW to 1.08','EE'],
+ ['Fan noise abnormal at 45dB in idle mode','Fan curve too aggressive under DPTF','Tune DPTF table in BIOS 0.2.36','Thermal'],
+ ['WLAN throughput drop 30% at 5GHz','Antenna cable routing too close to hinge','Re-route cable + add mylar','ME'],
+ ['LCD flicker at 60Hz when switching power source','Panel timing controller setting','Update panel FW / EDID','EE']
+];
+
+const RACKS=[],SLOTS={},UNITS=[],LOGS=[];
+const SCAN={covered:1268,missed:41};
+
+const slotKey=(r,L,P)=>r+'-'+pad(L)+'-'+pad(P);
+(function build(){
+  AREAS.forEach(z=>{
+    for(let i=1;i<=z.carts;i++){
+      const code=z.a+'-'+pad(i);
+      RACKS.push({code,area:z.a,no:i,localNo:pad(i)+' 臺車',note:'',active:true});
+      z.racks.push(code);
+      for(let L=1;L<=CFG.levels;L++)for(let P=1;P<=CFG.pos;P++){
+        const k=slotKey(code,L,P);
+        SLOTS[k]={k,rack:code,area:z.a,level:L,pos:P,sn:null,block:null};
+      }}});
+})();
+const rackOf=c=>RACKS.find(x=>x.code===c);
+/* 現場語言：FIN 已驗區 · 04 臺車 · 01 層 · 04 機位 */
+function locText(k){const s=SLOTS[k];if(!s)return k;
+  return s.area+' '+areaName(s.area)+' · '+pad(rackOf(s.rack).no)+' 臺車 · '+pad(s.level)+' 層 · '+pad(s.pos)+' 機位';}
+function locLabelZh(k){const s=SLOTS[k];if(!s)return k;
+  return areaZh(s.area)+'，'+pad(rackOf(s.rack).no)+'臺車，'+pad(s.level)+'層，'+pad(s.pos)+'機位';}
+function locShort(k){return k;}
+function areaForUnit(u){return FIN_STAT.indexOf(u.dut)>=0?'FIN':'WIP';}
+function slotState(s){return s.block?'BLOCKED':s.sn?'OCCUPIED':'EMPTY';}
+
+function mkSN(i){return '8069949'+pad(9000000+i*7+ri(0,5),7);}   /* 14 碼 */
+function mkUnit(i){
+  const proj=wpick({Slate:28,Blade14:26,Kevel:28,Sunfire:18});
+  const u={sn:mkSN(i),project:proj,model:pick(MODELS[proj]),phase:pick(PHASES),dut:wpick(DSTAT_W),
+    owner:pick(OWNERS),state:'IN',loc:null,inAt:addD(NOW,-ri(0,50)),lastMove:null,issues:[],loan:null,temp:false};
+  u.lastMove=rnd()<0.12?u.inAt:addD(NOW,-ri(0,Math.min(days(u.inAt),24)));
+  const ni=rnd()<0.32?ri(1,2):0;
+  for(let j=0;j<ni;j++){const p=pick(ISSUE_POOL);
+    u.issues.push({title:p[0],rc:p[1],ca:p[2],owner:p[3],status:rnd()<0.45?'Closed':(rnd()<0.6?'Tracking':'Open')});}
+  return u;
+}
+(function seedData(){
+  Object.values(SLOTS).forEach(s=>{if(rnd()<0.03)s.block={reason:pick(BLOCK_RSN),by:pick(EMPS)[0],at:addD(NOW,-ri(1,40))};});
+  Object.values(SLOTS).forEach(s=>{if(!s.block&&rnd()<0.008)s.labelBroken={reason:'標籤磨損掃不到',by:pick(EMPS)[0],at:addD(NOW,-ri(1,15))};});
+  const free={WIP:[],FIN:[]};
+  Object.values(SLOTS).forEach(s=>{if(!s.block)free[s.area].push(s.k);});
+  Object.keys(free).forEach(z=>{const A=free[z];for(let i=A.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[A[i],A[j]]=[A[j],A[i]];}});
+  const ptr={WIP:0,FIN:0};
+  for(let i=0;i<1000;i++){
+    const u=mkUnit(i);UNITS.push(u);
+    if(i<40){u.state='OUT';const e=pick(EMPS);u.loan={by:e[0]+' '+e[1],out:addD(NOW,-ri(1,12))};continue;}
+    let z=areaForUnit(u);
+    let k=free[z][ptr[z]++];
+    if(!k){z=z==='FIN'?'WIP':'FIN';k=free[z][ptr[z]++];}
+    if(!k){u.state='LEFT';continue;}
+    u.loc=k;SLOTS[k].sn=u.sn;
+  }
+  UNITS.forEach(u=>{
+    if(u.state==='IN'&&u.loc)LOGS.push({t:u.inAt,type:'入庫上架',sn:u.sn,loc:u.loc,emp:pick(EMPS).slice(0,2).join(' '),note:'人員自選櫃位'});
+    if(u.state==='OUT')LOGS.push({t:u.loan.out,type:'取機出庫',sn:u.sn,loc:'-',emp:u.loan.by,note:'刷櫃位條碼釋放'});
+  });
+  LOGS.sort((a,b)=>b.t-a.t);
+})();
+const bySN={};UNITS.forEach(u=>bySN[u.sn]=u);
+function isStale(u){return u.state==='IN'&&days(u.lastMove)>CFG.staleDays;}
+function openIssues(u){return u.issues.filter(i=>i.status!=='Closed');}
+function areaMismatch(u){return u.state==='IN'&&u.loc&&SLOTS[u.loc].area!==areaForUnit(u);}
+function coverage(){return Math.round(SCAN.covered/(SCAN.covered+SCAN.missed)*1000)/10;}
+
+function logEvent(type,sn,loc,note){
+  LOGS.unshift({t:new Date(),type,sn:sn||'-',loc:loc||'-',emp:opEmp(),note:note||''});}
+function opEmp(){return document.getElementById('opName').textContent;}
+function toast(m,c){const d=document.createElement('div');d.className=c||'';d.textContent=m;
+  document.getElementById('toast').appendChild(d);setTimeout(()=>d.remove(),3200);}
+</script>
+<script>
+/* ================= 路由與共用 ================= */
+const TTL={dash:['戰情儀表板','OBE 區 DUT 即時在庫概況'],
+ in:['入庫上架 Check-in','刷櫃位條碼 → 刷機台 S/N → 綁定完成（人員自由選空位）'],
+ out:['取機出庫 Check-out','刷櫃位條碼 → 二次確認 → 釋放該格'],
+ map:['找機台與儲位地圖','燈號即現況：紅＝已使用、綠＝空位；查詢命中會在圖上閃爍定位'],
+ log:['事件紀錄','Audit Trail']};
+document.getElementById('nav').addEventListener('click',e=>{const a=e.target.closest('a');if(!a)return;go(a.dataset.p);});
+function go(p){
+  document.querySelectorAll('#nav a').forEach(x=>x.classList.toggle('on',x.dataset.p===p));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
+  document.getElementById('p-'+p).classList.add('on');
+  document.getElementById('ttl').textContent=TTL[p][0];document.getElementById('sub').textContent=TTL[p][1];
+  if(p==='dash')renderDash();if(p==='map')renderMap();if(p==='log')renderLog();
+  if(p==='in')setTimeout(()=>document.getElementById('inScan').focus(),50);
+  if(p==='out')setTimeout(()=>document.getElementById('outScan').focus(),50);
+}
+setInterval(()=>{const d=new Date();document.getElementById('clock').textContent=
+  pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());},1000);
+function closeAll(){document.getElementById('mask').classList.remove('on');
+  document.getElementById('drawer').classList.remove('on');document.getElementById('modal').classList.remove('on');}
+function modal(title,body,btns){
+  document.getElementById('mdTtl').textContent=title;document.getElementById('mdBody').innerHTML=body;
+  const f=document.getElementById('mdFoot');f.innerHTML='';
+  (btns||[{t:'關閉',c:'btn',f:closeAll}]).forEach(b=>{const el=document.createElement('button');
+    el.className=b.c||'btn';el.textContent=b.t;el.onclick=b.f;f.appendChild(el);});
+  document.getElementById('mask').classList.add('on');document.getElementById('modal').classList.add('on');}
+function drawer(title,html){document.getElementById('drTtl').textContent=title;document.getElementById('drBody').innerHTML=html;
+  document.getElementById('mask').classList.add('on');document.getElementById('drawer').classList.add('on');}
+function statTag(u){return '<span class="tag '+DSTAT_TAG[u.dut]+'">'+u.dut+'</span>';}
+function stateTag(u){return u.state==='IN'?'<span class="tag t-green">在庫</span>':u.state==='OUT'?'<span class="tag t-amber">已取出</span>':
+  '<span class="tag t-gray">已離場</span>';}
+function unitRowHTML(u){
+  return '<td class="mono">'+u.sn+(u.temp?' <span class="tag t-red">臨時</span>':'')+'</td><td>'+u.project+'</td><td>'+u.model+'</td>'+
+    '<td>'+statTag(u)+'</td><td>'+u.owner+'</td><td class="mono">'+(u.state==='IN'&&u.loc?u.loc:stateTag(u))+'</td>';}
+
+/* ================= 儀表板 ================= */
+function renderDash(){
+  const inn=UNITS.filter(u=>u.state==='IN'),out=UNITS.filter(u=>u.state==='OUT');
+  const all=Object.values(SLOTS),total=all.length,used=all.filter(s=>s.sn).length;
+  const blocked=all.filter(s=>s.block).length;
+  const st=inn.filter(isStale);
+  const util=Math.round(used/(total-blocked)*100),cov=coverage();
+  const k=[
+    {l:'在庫機台 In Storage',v:inn.length,f:'建檔 '+UNITS.length+' 台｜已取出 '+out.length+' 台',c:''},
+    {l:'可用儲位使用率',v:util+'%',f:used+' / '+(total-blocked)+' 位（停用 '+blocked+' 位不計）',c:util>90?'bad':util>80?'warn':'ok',bar:util},
+    {l:'刷取覆蓋率 Scan Coverage',v:cov+'%',f:'應刷 '+(SCAN.covered+SCAN.missed)+' 次，漏刷 '+SCAN.missed+' 次',c:cov<95?'bad':cov<98?'warn':'ok',bar:cov},
+    {l:'呆滯機台 >'+CFG.staleDays+' 天',v:st.length,f:'佔在庫 '+Math.round(st.length/inn.length*100)+'%，需清架',c:st.length>60?'bad':st.length?'warn':'ok'}
+  ];
+  document.getElementById('kpis').innerHTML=k.map(x=>'<div class="kpi '+x.c+'"><div class="lb">'+x.l+'</div><div class="vl">'+x.v+'</div>'+
+    (x.bar!=null?'<div class="bar"><i class="'+(x.l.indexOf('覆蓋')>=0?(x.bar<95?'hi':x.bar<98?'md':''):(x.bar>90?'hi':x.bar>80?'md':''))+'" style="width:'+Math.min(x.bar,100)+'%"></i></div>':'')+
+    '<div class="ft">'+x.f+'</div></div>').join('');
+  document.getElementById('zoneUtil').innerHTML=AREAS.map(z=>{
+    const ss=all.filter(s=>s.area===z.a),b=ss.filter(s=>s.block).length;
+    const u=ss.filter(s=>s.sn).length,p=Math.round(u/(ss.length-b)*100);
+    return '<div style="margin-bottom:12px"><div class="row" style="justify-content:space-between"><span>'+areaTag(z.a)+' '+z.name+
+      ' <span class="muted small">('+z.racks.length+' 臺車)</span></span><span class="mono small">'+u+'/'+(ss.length-b)+' · '+p+'%</span></div>'+
+      '<div class="bar"><i class="'+(p>90?'hi':p>80?'md':'')+'" style="width:'+p+'%"></i></div>'+
+      '<div class="small muted" style="margin-top:3px">'+z.desc+'</div></div>';}).join('')+
+    '<div class="small muted">條碼區碼即現場印出的 <b class="mono">WIP</b>／<b class="mono">FIN</b>，兩區台車各自從 01 編起。</div>';
+  const todayIn=LOGS.filter(l=>l.type==='入庫上架'&&days(l.t)<1).length;
+  const todayOut=LOGS.filter(l=>l.type==='取機出庫'&&days(l.t)<1).length;
+  document.getElementById('todayOps').innerHTML=
+    '<div class="grid g2"><div class="kpi ok"><div class="lb">入庫</div><div class="vl">'+todayIn+'</div><div class="ft">今日累計</div></div>'+
+    '<div class="kpi"><div class="lb">出庫</div><div class="vl">'+todayOut+'</div><div class="ft">今日累計</div></div></div>'+
+    '<div class="msg '+(cov<95?'warn':'info')+'" style="margin-top:10px"><b>刷取覆蓋率 '+cov+'%</b>'+
+    (cov<95?'低於 95%：代表「拿了沒刷」仍多，建議把第二階段的盤點提前導入。':'高於 95%：兩段刷取有落實，盤點可維持第二階段再導入。')+'</div>';
+  document.getElementById('recentTbl').innerHTML=logTable(LOGS.slice(0,12));
+}
+function logTable(rows){
+  return '<table><thead><tr><th>時間</th><th>事件</th><th>S/N</th><th>儲位條碼</th><th>操作員</th><th>備註</th></tr></thead><tbody>'+
+   rows.map(l=>'<tr><td class="mono">'+dstr(l.t)+'</td><td>'+l.type+'</td>'+
+   '<td class="mono">'+l.sn+'</td><td class="mono">'+l.loc+'</td><td>'+esc(l.emp)+'</td>'+
+   '<td class="small muted">'+esc(l.note)+'</td></tr>').join('')+'</tbody></table>';}
+</script>
+<script>
+/* ================= 掃描共用：去抖動、手動輸入 ================= */
+let LASTSCAN={v:'',t:0};
+function dedup(v){const n=Date.now();
+  if(v===LASTSCAN.v&&n-LASTSCAN.t<CFG.dedupSec*1000){toast('2 秒內重複刷同一條碼，已忽略');return true;}
+  LASTSCAN={v,t:n};return false;}
+/* v0.4：條碼內容 = 區域-台車-層-機位，例 FIN-04-01-04 */
+const SLOTRE=/^(WIP|FIN)-\d{2}-\d{2}-\d{2}$/;
+function normSlot(c){
+  c=(c||'').trim().toUpperCase().replace(/\s+/g,'');
+  const m=c.match(/^(WIP|FIN)[-_/]?(\d{1,2})[-_/]?(\d{1,2})[-_/]?(\d{1,2})$/);
+  return m?m[1]+'-'+pad(+m[2])+'-'+pad(+m[3])+'-'+pad(+m[4]):c;
+}
+const SLOTFMT='FIN-04-01-04（區域-台車-層-機位）';
+function manualSlot(mode){
+  modal('標籤破損 — 手動輸入儲位',
+   '<div class="msg warn"><b>此入口會留下稽核紀錄</b>手動輸入等於少了一次實體確認，必須填理由；該櫃位會記為「標籤待補印」。</div>'+
+   '<label class="f">櫃位條碼（'+SLOTFMT+'）</label><input type="text" id="msCode" placeholder="FIN-04-01-04">'+
+   '<label class="f" style="margin-top:10px">理由（必填）</label><input type="text" id="msRsn" placeholder="例：標籤磨損掃不到／被機台壓住">',
+   [{t:'取消',c:'btn',f:closeAll},
+    {t:'確認',c:'btn pri',f:()=>{
+      const c=normSlot(document.getElementById('msCode').value),r=(document.getElementById('msRsn').value||'').trim();
+      if(!SLOTS[c])return toast('查無此櫃位條碼','err');
+      if(!r)return toast('請填理由','err');
+      SLOTS[c].labelBroken={reason:r,by:opEmp(),at:new Date()};
+      logEvent('手動輸入儲位','-',c,'理由：'+r+'（標籤待補印）');closeAll();
+      if(mode==='in')handleIn(c,true);else handleOut(c,true);}}]);
+}
+function freeByArea(){const m={WIP:0,FIN:0};
+  Object.values(SLOTS).forEach(s=>{if(!s.sn&&!s.block&&rackOf(s.rack).active)m[s.area]++;});return m;}
+
+/* ================= 入庫：先刷櫃位條碼 → 再刷機台 S/N ================= */
+let IN={slot:null,u:null,step:1,shift:[]};
+function setSteps(id,n){document.querySelectorAll('#'+id+' .step').forEach((el,i)=>{
+  el.classList.toggle('on',i===n-1);el.classList.toggle('done',i<n-1);});}
+function inMsg(c,t,b){document.getElementById('inMsg').innerHTML=c?'<div class="msg '+c+'"><b>'+t+'</b>'+(b||'')+'</div>':'';}
+function inReset(keep){
+  IN.slot=null;IN.u=null;IN.step=1;setSteps('inSteps',1);
+  document.getElementById('inCap').textContent='請先刷「櫃位條碼」';
+  document.getElementById('inScan').value='';document.getElementById('inScan').placeholder='等待掃描…';
+  document.getElementById('inInfo').innerHTML='<span class="muted small">尚未刷入機台</span>';
+  const fz=freeByArea();
+  document.getElementById('inLoc').className='locpanel';
+  document.getElementById('inLoc').innerHTML='<div class="muted small">目標櫃位 Target Location</div>'+
+    '<div class="bigloc">— — —<small>請先刷櫃位條碼，人員可自由挑選任何空位</small></div>'+
+    '<div class="row" style="justify-content:center;margin-top:10px;gap:8px">'+
+    AREAS.map(z=>'<span class="tag '+(fz[z.a]>60?'t-green':fz[z.a]>0?'t-amber':'t-red')+'">'+z.a+' 空位 '+fz[z.a]+'</span>').join('')+'</div>'+
+    '<div class="small muted" style="margin-top:8px">區域只是建議：未驗放 WIP、已驗放 FIN；放到另一區仍可完成，系統只提示不擋下。</div>';
+  if(!keep)inMsg(null);document.getElementById('inScan').focus();
+}
+document.getElementById('inScan').addEventListener('keydown',e=>{if(e.key!=='Enter')return;
+  const v=e.target.value.trim().toUpperCase();e.target.value='';if(v)handleIn(v);});
+function unitInfoHTML(u){
+  const oi=openIssues(u),wa=areaForUnit(u);
+  return '<dl class="kv"><dt>S/N</dt><dd class="mono">'+u.sn+(u.temp?' <span class="tag t-red">臨時建檔</span>':'')+'</dd>'+
+   '<dt>專案／機種</dt><dd>'+u.project+' · '+u.model+' ('+u.phase+')</dd>'+
+   '<dt>DUT 狀態</dt><dd>'+statTag(u)+'</dd>'+
+   '<dt>建議區域</dt><dd>'+areaTag(wa)+' '+areaName(wa)+'</dd>'+
+   '<dt>Owner</dt><dd>'+u.owner+'</dd>'+
+   '<dt>入庫天數</dt><dd>'+days(u.inAt)+' 天'+(isStale(u)?' <span class="tag t-amber">呆滯</span>':'')+'</dd>'+
+   '<dt>OBE Issue</dt><dd>'+(oi.length?'<span class="tag t-red">未結 '+oi.length+' 筆</span>':'<span class="tag t-green">無未結</span>')+'</dd></dl>'+
+   (oi.length?'<div style="margin-top:8px">'+oi.map(i=>'<div class="msg warn" style="margin-bottom:6px"><b>'+esc(i.title)+'</b>'+
+     '<div class="small">RC：'+esc(i.rc)+'<br>CA：'+esc(i.ca)+'<br>Status: '+i.status+' ｜ Owner: '+i.owner+'</div></div>').join('')+'</div>':'');}
+
+function handleIn(v,skipDedup){
+  if(!skipDedup&&dedup(v))return;
+  v=normSlot(v);
+  if(IN.step===1)return inSlotScan(v);
+  return inUnitScan(v);
+}
+/* --- Step 1：刷櫃位條碼 --- */
+function inSlotScan(v){
+  if(!SLOTRE.test(v)){
+    if(bySN[v])return inMsg('warn','順序不對：本版是「先櫃位、後機台」',
+      '請先刷你要放的那一格櫃位條碼，系統確認可放置後再刷機台 S/N。');
+    return inMsg('err','無法辨識的條碼','櫃位條碼格式為 '+SLOTFMT+'；標籤破損請按「手動輸入儲位」。');}
+  const s=SLOTS[v];
+  if(!s)return inMsg('err','查無此櫃位條碼','系統無 ['+esc(v)+']，可能是別區或尚未建檔的台車，請通知管理員。');
+  if(!rackOf(s.rack).active)return inMsg('err','此台車已停用','['+s.rack+'] 不可放置，請改用其他台車。');
+  if(s.block)return inMsg('err','此櫃位停用中','['+s.k+'] '+esc(s.block.reason)+'。請改刷其他空位。');
+  if(s.sn)return inOccupied(s);
+  acceptSlot(s);
+}
+/* --- 櫃位已被佔用 --- */
+function inOccupied(s){
+  modal('⚠ 此櫃位已被佔用，請改刷其他空櫃位',
+   '<div class="msg warn" style="margin:0"><b>就算現場這一格是空的，也不能放</b>'+
+   '常見情況是該機台被 RD 拿去 Debug、送測時沒有刷櫃位，系統仍把它記在這一格。<br>'+
+   '<b>請改刷其他綠燈空櫃位</b>把手上這台放好，先不要卡在這裡。</div>',
+   [{t:'知道了，改刷其他櫃位',c:'btn pri',f:()=>{closeAll();inReset();
+       inMsg('warn','請改刷其他空櫃位','['+s.k+'] 已被佔用，不能放。可參考畫面上 WIP／FIN 的可用空位數，或到「找機台與儲位地圖」找綠燈。');}}]);
+}
+function acceptSlot(s){
+  IN.slot=s;IN.step=2;setSteps('inSteps',2);
+  document.getElementById('inLoc').className='locpanel go';
+  document.getElementById('inLoc').innerHTML=
+    '<div class="muted small">✔ 此格可放置 Target Location</div>'+
+    '<div class="bigloc">'+s.k+'<small>'+locLabelZh(s.k)+'</small></div>'+
+    '<div class="row" style="justify-content:center;margin-top:8px">'+
+      '<span class="tag t-green">空位可用</span>'+areaTag(s.area)+
+      '<span class="tag t-gray">'+areaName(s.area)+'</span></div>'+
+    '<div class="small muted" style="margin-top:8px">請接著刷機台 S/N 完成綁定</div>';
+  document.getElementById('inCap').textContent='請刷機台 S/N（目標 '+s.k+'）';
+  document.getElementById('inScan').placeholder='掃描機台 S/N…';
+  if(!document.getElementById('inMsg').innerHTML)
+    inMsg('info','櫃位確認完成','['+s.k+'] 為空位，可放置。若要改放別格，直接刷另一格的櫃位條碼即可更換目標。');
+  document.getElementById('inScan').focus();
+}
+/* --- Step 2：刷機台 S/N --- */
+function inUnitScan(v){
+  if(SLOTRE.test(v)){
+    const s2=SLOTS[v];
+    if(!s2)return inMsg('err','查無此櫃位條碼','');
+    inMsg('info','已更換目標櫃位','原目標 '+IN.slot.k+' → 新目標將重新檢查。');
+    IN.step=1;return inSlotScan(v);}
+  const u=bySN[v];
+  if(!u)return modal('未建檔 S/N',
+    '<div class="msg err"><b>'+esc(v)+' 不在機台主檔</b>可能是打字錯誤、他廠機台或未建 MO 的樣機。</div>'+
+    '<div class="small muted">選「臨時建檔」會列入儀表板的待補清單，由 JQE 於 SL2.0 補齊主檔後才會消失。</div>',
+    [{t:'拒收退回',c:'btn',f:()=>{logEvent('入庫拒收',v,IN.slot.k,'未建檔 S/N');closeAll();inReset();toast('已記錄拒收','err');}},
+     {t:'臨時建檔並上架',c:'btn pri',f:()=>{const nu=mkUnit(9000+UNITS.length);nu.sn=v;nu.temp=true;nu.issues=[];nu.state='NEW';nu.loc=null;
+        UNITS.push(nu);bySN[v]=nu;closeAll();logEvent('臨時建檔',v,IN.slot.k,'待補主檔資料');
+        commitIn(nu,'臨時建檔（已列待補清單）');}}]);
+  if(u.state==='LEFT')return modal('此機台已離場',
+    '<div class="msg err"><b>'+u.sn+' 狀態為「已離場」（出貨或報廢）</b>要重新入庫必須先「重新啟用」，並留下理由。</div>'+
+    '<label class="f">重新啟用理由（必填）</label><input type="text" id="reRsn" placeholder="例：出貨取消退回／報廢前借回複測">',
+    [{t:'擋下，不收',c:'btn',f:()=>{logEvent('入庫擋下',u.sn,IN.slot.k,'已離場機台，未重新啟用');closeAll();inReset();}},
+     {t:'重新啟用並上架',c:'btn pri',f:()=>{const r=(document.getElementById('reRsn').value||'').trim();
+        if(!r)return toast('請填理由','err');u.state='NEW';closeAll();
+        logEvent('重新啟用',u.sn,IN.slot.k,r);commitIn(u,'已離場機台重新啟用');}}]);
+  if(u.state==='IN'&&u.loc&&u.loc!==IN.slot.k)
+    return modal('此機台系統顯示已在架上',
+      '<div class="msg warn"><b>'+u.sn+' 目前記錄在 '+u.loc+'</b>（'+locLabelZh(u.loc)+'）<br>你現在要把它綁到 '+IN.slot.k+'。'+
+      '若是移位，系統會自動釋放原位；若原位那台其實是別台，請先到「找機台與儲位地圖」確認。</div>',
+      [{t:'取消',c:'btn',f:()=>{closeAll();inReset();}},
+       {t:'確認移位到此格',c:'btn pri',f:()=>{closeAll();commitIn(u,'移位（原位 '+u.loc+' 自動釋放）');}}]);
+  if(u.state==='IN'&&u.loc===IN.slot.k)
+    return inMsg('warn','重複刷取','['+u.sn+'] 已經綁在 '+IN.slot.k+'，不需重複作業。');
+  if(u.state==='OUT')return commitIn(u,'歸還入庫（離架 '+days(u.loan.out)+' 天）');
+  commitIn(u,null);
+}
+function commitIn(u,how){
+  const s=IN.slot;
+  if(u.loc&&SLOTS[u.loc]&&u.loc!==s.k)SLOTS[u.loc].sn=null;
+  s.sn=u.sn;u.loc=s.k;u.state='IN';u.lastMove=new Date();u.loan=null;
+  const want=areaForUnit(u),got=s.area,cross=want!==got;
+  SCAN.covered++;
+  logEvent('入庫上架',u.sn,s.k,(how?how+'｜':'')+'人員自選櫃位'+(cross?'｜跨區擺放（建議 '+want+'）':''));
+  IN.shift.unshift({t:new Date(),sn:u.sn,loc:s.k,proj:u.project,cross});
+  renderShift();
+  document.getElementById('inInfo').innerHTML=unitInfoHTML(u);
+  const html='<div class="msg ok"><b>✔ 綁定完成</b>['+u.sn+'] → '+s.k+'（'+locLabelZh(s.k)+'）　'+dstr(new Date())+'</div>'+
+    (cross?'<div class="msg warn"><b>提示：跨區擺放</b>此機台狀態為「'+u.dut+'」，建議放在 '+want+' '+areaName(want)+
+     '。系統已完成綁定不擋下，但會列入儀表板的「區域不符」清單，下次異動時歸位。</div>':'');
+  toast('綁定完成 '+s.k,'ok');
+  setTimeout(()=>{inReset(true);document.getElementById('inMsg').innerHTML=html;},1000);
+}
+function renderShift(){
+  document.getElementById('inShiftN').textContent=IN.shift.length+' 筆';
+  document.getElementById('inShift').innerHTML=IN.shift.length?
+   '<table><thead><tr><th>時間</th><th>S/N</th><th>櫃位條碼</th><th>專案</th></tr></thead><tbody>'+
+   IN.shift.map(r=>'<tr><td class="mono">'+dstr(r.t)+'</td><td class="mono">'+r.sn+'</td>'+
+   '<td class="mono">'+r.loc+(r.cross?' <span class="tag t-amber">跨區</span>':'')+'</td><td>'+r.proj+'</td></tr>').join('')+
+   '</tbody></table>':'<div class="bd"><span class="muted small">本班尚無入庫紀錄</span></div>';}
+</script>
+<script>
+/* ================= 出庫：只刷櫃位條碼即釋放（含二次確認） ================= */
+let OUT={last:null,shift:[]};
+function outMsg(c,t,b){document.getElementById('outMsg').innerHTML=c?'<div class="msg '+c+'"><b>'+t+'</b>'+(b||'')+'</div>':'';}
+function outReset(keep){
+  OUT.last=null;setSteps('outSteps',1);
+  document.getElementById('outCap').textContent='請刷「櫃位條碼」釋放該格';
+  document.getElementById('outScan').value='';document.getElementById('outScan').placeholder='等待掃描…';
+  document.getElementById('outInfo').innerHTML='<span class="muted small">尚未刷取</span>';
+  document.getElementById('outLoc').className='locpanel';
+  document.getElementById('outLoc').innerHTML='<div class="muted small">釋放的櫃位 Released Location</div>'+
+    '<div class="bigloc">— — —<small>刷櫃位條碼，確認後才釋放</small></div>';
+  if(!keep)outMsg(null);document.getElementById('outScan').focus();}
+document.getElementById('outScan').addEventListener('keydown',e=>{if(e.key!=='Enter')return;
+  const v=e.target.value.trim().toUpperCase();e.target.value='';if(v)handleOut(v);});
+function handleOut(v,skipDedup){
+  if(!skipDedup&&dedup(v))return;
+  v=normSlot(v);
+  if(!SLOTRE.test(v)){
+    const u=bySN[v];
+    if(u)return outMsg('warn','本版出庫只需刷「櫃位條碼」',
+      u.state==='IN'&&u.loc?('['+u.sn+'] 目前在 '+u.loc+'（'+locLabelZh(u.loc)+'），請到現場刷該格的櫃位條碼即可釋放。'):
+      ('['+u.sn+'] 目前狀態為'+(u.state==='OUT'?'已取出':'已離場')+'，不在架上。'));
+    return outMsg('err','無法辨識的條碼','櫃位條碼格式為 '+SLOTFMT+'；標籤破損請按「手動輸入儲位」。');}
+  const s=SLOTS[v];
+  if(!s)return outMsg('err','查無此櫃位條碼','系統無 ['+esc(v)+']。');
+  if(s.block)return outMsg('err','此櫃位為停用中','['+s.k+'] '+esc(s.block.reason)+'，本來就不會有機台。');
+  if(!s.sn)return outMsg('err','此櫃位系統顯示為空','['+s.k+'] 沒有綁定任何機台。若現場實際有機台，請改走「入庫上架」把它綁上去。');
+  confirmRelease(s);
+}
+function confirmRelease(s){
+  const u=bySN[s.sn],oi=openIssues(u);
+  modal('確認取出？',
+   '<div class="msg warn" style="margin-bottom:10px"><b>此動作會把櫃位釋放為空位</b>請先確認手上要取走的就是這一台，避免誤刷。</div>'+
+   '<div style="text-align:center;border:1px solid var(--line);border-radius:10px;padding:16px 12px;background:#f8fafc">'+
+     '<div class="muted small">櫃位條碼</div>'+
+     '<div class="mono" style="font-size:30px;font-weight:800;letter-spacing:1px">'+s.k+'</div>'+
+     '<div class="small" style="margin-top:4px">'+locLabelZh(s.k)+'</div>'+
+     '<div class="muted small" style="margin-top:12px">機台 S/N</div>'+
+     '<div class="mono" style="font-size:22px;font-weight:700">'+u.sn+'</div></div>'+
+   (oi.length?'<div class="msg err" style="margin-top:10px"><b>⚠ 此機台有 '+oi.length+' 筆未結 OBE Issue</b>'+
+     'Owner（'+oi.map(i=>i.owner).join('、')+'）會在取出後收到通知。</div>':''),
+   [{t:'取消，不取出',c:'btn',f:()=>{closeAll();outReset();toast('已取消');}},
+    {t:'確認取出',c:'btn pri',f:()=>{closeAll();releaseSlot(s);}}]);
+}
+function releaseSlot(s){
+  const u=bySN[s.sn],now=new Date();
+  s.sn=null;
+  u.state='OUT';u.loc=null;u.lastMove=now;
+  u.loan={by:opEmp(),out:now};
+  SCAN.covered++;
+  logEvent('取機出庫',u.sn,s.k,'刷櫃位條碼並二次確認後釋放');
+  OUT.last={slot:s,u,at:now};
+  setSteps('outSteps',3);
+  OUT.shift.unshift({t:now,sn:u.sn,loc:s.k});
+  document.getElementById('outShiftN').textContent=OUT.shift.length+' 筆';
+  document.getElementById('outShift').innerHTML='<table><thead><tr><th>時間</th><th>S/N</th><th>原櫃位條碼</th><th>操作員</th></tr></thead><tbody>'+
+    OUT.shift.map(r=>'<tr><td class="mono">'+dstr(r.t)+'</td><td class="mono">'+r.sn+'</td><td class="mono">'+r.loc+'</td>'+
+    '<td class="small">'+esc(opEmp())+'</td></tr>').join('')+'</tbody></table>';
+  document.getElementById('outInfo').innerHTML=unitInfoHTML(u);
+  const oi=openIssues(u);
+  document.getElementById('outLoc').className='locpanel go';
+  document.getElementById('outLoc').innerHTML=
+    '<div class="muted small">✔ 已釋放 Released</div>'+
+    '<div class="bigloc">'+s.k+'<small>'+locLabelZh(s.k)+' 現為空位</small></div>'+
+    '<div class="row" style="justify-content:center;margin-top:8px">'+
+      '<span class="tag t-gray mono">'+u.sn+'</span></div>';
+  outMsg(oi.length?'warn':'ok',
+    oi.length?'⚠ 已釋放，但此機台有 '+oi.length+' 筆未結 OBE Issue':'✔ 已釋放此櫃位',
+    '取走的是 '+u.sn+'　由 '+esc(opEmp())+' 於 '+dstr(now)+' 取出'+
+    (oi.length?('。Issue Owner（'+oi.map(i=>i.owner).join('、')+'）會收到通知。'):'。'));
+  toast('已釋放 '+s.k,'ok');
+}
+function fillSel(id,arr,ph){const el=document.getElementById(id);
+  el.innerHTML='<option value="">'+ph+'</option>'+arr.map(a=>'<option>'+a+'</option>').join('');}
+
+/* ================= 機台明細抽屜 ================= */
+function showUnit(sn){
+  const u=bySN[sn];const ev=LOGS.filter(l=>l.sn===sn).slice(0,10);
+  drawer('機台明細 '+sn,
+   unitInfoHTML(u)+
+   '<h4 style="margin:16px 0 6px;font-size:13px">位置狀態</h4>'+
+   (u.state==='IN'&&u.loc?'<div class="msg ok"><b>在庫 '+u.loc+'</b>'+locLabelZh(u.loc)+'｜已放 '+days(u.lastMove)+' 天'+
+      (areaMismatch(u)?'<br><span class="tag t-violet">區域不符：建議 '+areaForUnit(u)+'，下次異動時歸位</span>':'')+'</div>':
+    u.state==='OUT'?'<div class="msg warn"><b>已取出</b>由 '+esc(u.loan.by)+' 於 '+dstr(u.loan.out)+' 取出（離架 '+days(u.loan.out)+' 天）</div>':
+    '<div class="msg err"><b>已離場</b>已出貨或報廢；要再入庫需先「重新啟用」</div>')+
+   '<h4 style="margin:16px 0 6px;font-size:13px">異動履歷</h4><ul class="tl">'+
+   (ev.length?ev.map(l=>'<li><div class="tm">'+dstr(l.t)+'</div><b>'+l.type+'</b> '+(l.loc!=='-'?'<span class="mono">'+l.loc+'</span> ':'')+
+     '<div class="small muted">'+esc(l.emp)+' ｜'+esc(l.note)+'</div></li>').join(''):'<li class="muted small">無紀錄</li>')+'</ul>'+
+   (u.state==='IN'&&u.loc?'<div class="row"><button class="btn pri" onclick="closeAll();locateUnit(\''+u.sn+'\')">在地圖上定位</button>'+
+     '<button class="btn" onclick="printLabel(\''+u.loc+'\')">檢視櫃位標籤</button></div>':''));
+}
+
+/* ================= 櫃位標籤（1D 條碼，比照現場已印出的樣式） ================= */
+function barHTML(txt,h){
+  let s=0;for(let i=0;i<txt.length;i++)s=(s*31+txt.charCodeAt(i))>>>0;
+  let out='<i style="width:2px;height:'+h+'px"></i><i style="width:1px;height:'+h+'px;background:#fff"></i><i style="width:1px;height:'+h+'px"></i>';
+  for(let i=0;i<58;i++){s=(s*1103515245+12345)>>>0;
+    const w=1+((s>>13)&3),white=1+((s>>19)&2);
+    out+='<i style="width:'+w+'px;height:'+h+'px"></i><i style="width:'+white+'px;height:'+h+'px;background:#fff"></i>';}
+  out+='<i style="width:1px;height:'+h+'px"></i><i style="width:1px;height:'+h+'px;background:#fff"></i><i style="width:2px;height:'+h+'px"></i>';
+  return '<div class="bars">'+out+'</div>';}
+function printLabel(k){
+  const s=SLOTS[k];if(!s)return;
+  modal('櫃位標籤 '+k,
+    '<div class="lblcard"><div style="text-align:center">'+barHTML(k,46)+
+      '<div class="mono" style="font-size:17px;font-weight:800;letter-spacing:2px;margin-top:5px">'+k+'</div></div>'+
+    '<div><div class="zh">'+locLabelZh(k)+'</div>'+
+      '<div class="small muted" style="margin-top:6px">條碼內容（1D Code128）：<b class="mono">'+k+'</b><br>'+
+      '區域 '+s.area+'（'+areaZh(s.area)+'）／台車 '+pad(rackOf(s.rack).no)+'／層 '+pad(s.level)+'／機位 '+pad(s.pos)+'</div></div></div>'+
+    '<div class="msg info" style="margin-top:10px"><b>系統直接讀現場已印出的條碼</b>掃到 <span class="mono">'+k+'</span> 就等於「'+locLabelZh(k)+'」，不需要另外轉換或重印。'+
+    '面對台車由左至右為第 01 → 04 機位，由上而下為第 01 → '+pad(CFG.levels)+' 層。</div>',
+    [{t:'關閉',c:'btn',f:closeAll}]);}
+</script>
+<script>
+/* ================= 找機台與儲位地圖 ================= */
+let MODE='ALL',CURR=null,HITS=new Set(),FOUND=[],AFILTER='';
+function rackStat(code){const ss=Object.values(SLOTS).filter(s=>s.rack===code);
+  return {n:ss.length,used:ss.filter(s=>s.sn).length,block:ss.filter(s=>s.block).length,
+    hit:ss.filter(s=>HITS.has(s.k)).length};}
+function ledClass(s){return s.block?'led-block':s.sn?'led-occ':'led-empty';}
+function nextNo(a){return RACKS.filter(r=>r.area===a).reduce((m,r)=>Math.max(m,r.no),0)+1;}
+function setMode(m){
+  MODE=m;
+  document.getElementById('btnAll').classList.toggle('on',m==='ALL');
+  document.getElementById('btnOne').classList.toggle('on',m==='ONE');
+  if(m==='ONE'&&(!CURR||!rackOf(CURR)))CURR=RACKS[0].code;
+  renderMap();}
+function doFind(){
+  const kw=(document.getElementById('fKw').value||'').trim().toUpperCase();
+  const el=document.getElementById('findCnt');
+  if(!kw){FOUND=[];HITS=new Set();el.innerHTML='';return renderMap();}
+  FOUND=UNITS.filter(u=>u.sn.indexOf(kw)>=0);
+  FOUND.sort((a,b)=>(a.loc||'zz').localeCompare(b.loc||'zz'));
+  HITS=new Set(FOUND.filter(u=>u.state==='IN'&&u.loc).map(u=>u.loc));
+  MODE='ALL';                                   /* 查詢一律留在全區總覽，不跳單台車 */
+  document.getElementById('btnAll').classList.add('on');
+  document.getElementById('btnOne').classList.remove('on');
+  renderMap();
+  if(!FOUND.length){el.innerHTML='<span class="no">查無此 S/N</span>';return toast('查無此 S/N','err');}
+  if(FOUND.length===1){
+    const u=FOUND[0];
+    if(u.state==='IN'&&u.loc&&SLOTS[u.loc]){
+      el.innerHTML='<b class="mono">'+u.sn+'</b> → <b class="mono">'+u.loc+'</b> <b>'+locLabelZh(u.loc)+'</b>'+
+        ' <span class="muted">｜圖上紫框閃爍處</span>';}
+    else el.innerHTML='<b class="mono">'+u.sn+'</b> <span class="no">'+
+      (u.state==='OUT'?'已取出，不在架上':'已離場')+'</span>';
+    return;}
+  el.innerHTML='命中 <b>'+FOUND.length+'</b> 台，其中在架 <b>'+HITS.size+'</b> 台，已於圖上標出';
+}
+function clearFind(){document.getElementById('fKw').value='';FOUND=[];HITS=new Set();
+  document.getElementById('findCnt').innerHTML='';renderMap();}
+function locateUnit(sn){
+  const u=bySN[sn];
+  if(u.state!=='IN'||!u.loc)return toast('此機台不在架上','err');
+  document.getElementById('fKw').value=u.sn;go('map');doFind();
+}
+function renderMap(){if(MODE==='ALL')renderAll();else renderOne();}
+function renderAll(){
+  const tot=Object.values(SLOTS),used=tot.filter(s=>s.sn).length;
+  document.getElementById('mapTtl').innerHTML='全區總覽 <span class="hint">'+RACKS.length+' 臺車 ｜紅燈 '+used+
+    ' ｜綠燈 '+tot.filter(s=>!s.sn&&!s.block).length+
+    ' ｜灰燈 '+tot.filter(s=>s.block).length+'　（列＝層 01–'+pad(CFG.levels)+'，欄＝機位 01–0'+CFG.pos+'）</span>';
+  let h='';
+  AREAS.forEach(z=>{
+    const ss=tot.filter(s=>s.area===z.a),us=ss.filter(s=>s.sn).length;
+    h+='<div class="row" style="margin:14px 0 8px;align-items:baseline">'+areaTag(z.a)+
+      '<b style="font-size:13px">'+z.name+'</b>'+
+      '<span class="muted small">'+z.racks.length+' 臺車 ｜使用 '+us+'/'+ss.length+'</span></div>';
+    h+='<div class="cartgrid">';
+    z.racks.forEach(code=>{
+      const r=rackOf(code),st=rackStat(code);
+      let g='<span></span>';
+      for(let Pp=1;Pp<=CFG.pos;Pp++)g+='<span class="hl">'+pad(Pp)+'</span>';
+      for(let L=1;L<=CFG.levels;L++){
+        g+='<span class="lv">'+pad(L)+'</span>';
+        for(let Pp=1;Pp<=CFG.pos;Pp++){
+          const sl=SLOTS[slotKey(code,L,Pp)],u=sl.sn?bySN[sl.sn]:null;
+          const tip=sl.k+'\n'+locLabelZh(sl.k)+'\n'+
+            (u?('紅燈・已使用 '+u.sn+' ｜'+u.project+' ｜'+u.dut):
+               sl.block?('灰燈・停用 '+sl.block.reason):'綠燈・空位可放置');
+          g+='<i class="led '+ledClass(sl)+(HITS.has(sl.k)?' hitdot':'')+'" title="'+esc(tip)+'"></i>';}}
+      h+='<div class="cartcard'+(st.hit?' hasHit':'')+(CURR===code?' on':'')+'" onclick="CURR=\''+code+'\';setMode(\'ONE\')">'+
+        '<div class="hd"><span class="nm">'+code+'</span>'+
+        '<span class="rt">'+st.used+'/'+st.n+'</span></div>'+
+        (r.active?'':'<div class="sub"><b>已停用</b></div>')+
+        (st.hit?'<div class="sub"><b style="color:#7c3aed">命中 '+st.hit+' 台</b></div>':'')+
+        '<div class="mini">'+g+'</div></div>';});
+    h+='</div>';});
+  document.getElementById('mapView').innerHTML=h;
+  if(HITS.size)setTimeout(()=>{const el=document.querySelector('.cartcard.hasHit');
+    if(el)el.scrollIntoView({block:'center',behavior:'smooth'});},80);
+}
+function renderOne(){
+  const r=rackOf(CURR),st=rackStat(CURR);
+  document.getElementById('mapTtl').innerHTML=CURR+' <span class="hint">'+areaName(r.area)+' · '+r.localNo+
+    ' ｜使用 '+st.used+'/'+st.n+'（停用 '+st.block+'）'+(st.hit?' ｜<b style="color:#7c3aed">命中 '+st.hit+'</b>':'')+'</span>';
+  let h='<div class="row" style="margin-bottom:10px">'+areaTag(r.area)+
+    '<span class="tag '+(r.active?'t-green':'t-gray')+'">'+(r.active?'啟用中':'已停用')+'</span>'+
+    (r.note?'<span class="tag t-amber">'+esc(r.note)+'</span>':'')+
+    '<span style="margin-left:auto"></span>'+
+    '<button class="btn sm '+(r.active?'dgr':'')+'" onclick="toggleRack(\''+CURR+'\')">'+(r.active?'停用':'啟用')+'</button></div>';
+  h+='<div class="shelfrow"><span class="lv"></span>'+[1,2,3,4].map(i=>'<span class="small muted" style="text-align:center">第 '+pad(i)+' 機位</span>').join('')+'</div>';
+  for(let L=1;L<=CFG.levels;L++){
+    h+='<div class="shelfrow"><span class="lv">'+pad(L)+' 層</span>';
+    for(let Pp=1;Pp<=CFG.pos;Pp++){
+      const s=SLOTS[slotKey(CURR,L,Pp)],u=s.sn?bySN[s.sn]:null;
+      let body;
+      if(s.block)body='<div class="sn" style="color:#64748b">停用</div>';
+      else if(u)body='<div class="sn">'+u.sn+'</div>';
+      else body='<div class="sn" style="color:#16a34a">空位</div>';
+      h+='<div class="cell'+(HITS.has(s.k)?' hit':'')+'" onclick="slotClick(\''+s.k+'\')">'+
+        '<span class="led '+ledClass(s)+'"></span><div class="info"><div class="pn">'+pad(L)+'-'+pad(Pp)+(s.labelBroken?' ⚠標籤':'')+'</div>'+body+'</div></div>';}
+    h+='</div>';}
+  document.getElementById('mapView').innerHTML=h;
+}
+function slotClick(k){
+  const s=SLOTS[k];
+  if(s.sn)return showUnit(s.sn);
+  modal('儲位 '+k,'<dl class="kv"><dt>條碼內容</dt><dd class="mono">'+k+'</dd>'+
+    '<dt>標籤中文</dt><dd>'+locLabelZh(k)+'</dd>'+
+    '<dt>燈號</dt><dd>'+
+    (s.block?'<span class="tag t-gray">灰燈・停用</span> '+esc(s.block.reason):
+     '<span class="tag t-green">綠燈・空位</span>')+'</dd>'+
+    (s.labelBroken?'<dt>標籤</dt><dd><span class="tag t-amber">待補印</span> '+esc(s.labelBroken.reason)+'</dd>':'')+
+    '</dl><div style="margin-top:12px">'+barHTML(k,40)+'</div>',
+    [{t:'檢視標籤',c:'btn',f:()=>printLabel(k)},
+     {t:s.block?'解除停用':'標記停用（治具盤／破損）',c:'btn '+(s.block?'':'dgr'),f:()=>{
+        if(s.block){s.block=null;logEvent('儲位解除停用','-',k,'恢復可用');closeAll();renderMap();toast('已解除停用','ok');}
+        else modal('標記停用 '+k,'<label class="f">原因</label><select id="bkR">'+BLOCK_RSN.map(x=>'<option>'+x+'</option>').join('')+'</select>'+
+          '<div class="small muted" style="margin-top:8px">停用後燈號轉灰，使用率分母自動扣除。</div>',
+          [{t:'取消',c:'btn',f:closeAll},{t:'確認停用',c:'btn dgr',f:()=>{const x=document.getElementById('bkR').value;
+            s.block={reason:x,by:opEmp(),at:new Date()};logEvent('儲位停用','-',k,x);closeAll();renderMap();toast('已停用','ok');}}]);}},
+     {t:'關閉',c:'btn',f:closeAll}]);}
+function toggleRack(code){
+  const r=rackOf(code),st=rackStat(code);
+  if(r.active&&st.used)return modal('無法停用','<div class="msg err"><b>'+code+' 上還有 '+st.used+' 台機台</b>請先把機台移到其他台車再停用。</div>');
+  r.active=!r.active;logEvent(r.active?'台車啟用':'台車停用',code,'-',r.active?'恢復可用':'不再可放置');
+  renderMap();toast(r.active?'已啟用':'已停用','ok');}
+function newRack(){
+  modal('新增台車','<label class="f">區域</label><select id="nrZ">'+AREAS.map(z=>'<option value="'+z.a+'">'+z.a+' '+z.name+'</option>').join('')+'</select>'+
+   '<div class="small muted" style="margin-top:10px">台車號自動接續該區最後一號，建立後自動長出 '+CFG.levels+' 層 × '+CFG.pos+' 機位＝'+(CFG.levels*CFG.pos)+' 個儲位。</div>'+
+   '<div class="msg warn" style="margin-top:10px"><b>新增後必須先把 '+(CFG.levels*CFG.pos)+' 張條碼印出來貼上去</b>系統只認條碼；沒貼標籤的台車人員刷不到，等於不存在。</div>',
+   [{t:'取消',c:'btn',f:closeAll},
+    {t:'建立',c:'btn pri',f:()=>{
+      const z=document.getElementById('nrZ').value,zo=areaObj(z);
+      const no=nextNo(z),code=z+'-'+pad(no);
+      if(rackOf(code))return toast('該區已有 '+code,'err');
+      RACKS.push({code,area:z,no,localNo:pad(no)+' 臺車',note:'',active:true});
+      zo.racks.push(code);
+      for(let L=1;L<=CFG.levels;L++)for(let P=1;P<=CFG.pos;P++){
+        const k=slotKey(code,L,P);SLOTS[k]={k,rack:code,area:z,level:L,pos:P,sn:null,block:null};}
+      logEvent('新增台車',code,'-',z+' '+areaName(z)+'，新增 '+(CFG.levels*CFG.pos)+' 個機位，待補印條碼');
+      closeAll();CURR=code;setMode('ONE');toast('已新增 '+code,'ok');}}]);}
+
+/* ================= 事件紀錄 ================= */
+function renderLog(){
+  const t=document.getElementById('gType').value,kw=(document.getElementById('gKw').value||'').trim().toUpperCase();
+  const rows=LOGS.filter(l=>(!t||l.type===t)&&(!kw||l.sn.indexOf(kw)>=0||l.loc.indexOf(kw)>=0));
+  document.getElementById('gCnt').textContent='共 '+rows.length+' 筆（顯示前 300）';
+  document.getElementById('logTbl').innerHTML=logTable(rows.slice(0,300));}
+
+/* ===== 條碼槍焦點守門 =====
+   實體條碼槍等同鍵盤輸入：焦點一旦離開刷取框，刷出來的字就會掉在別的地方。
+   在入庫／出庫頁沒有跳窗時，自動把焦點拉回刷取框。 */
+function activePage(){const el=document.querySelector('.page.on');return el?el.id.slice(2):'';}
+function guardFocus(){
+  if(document.getElementById('mask').classList.contains('on'))return;
+  const pg=activePage();if(pg!=='in'&&pg!=='out')return;
+  const box=document.getElementById(pg==='in'?'inScan':'outScan'),a=document.activeElement;
+  if(a===box)return;
+  if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;
+  box.focus();
+}
+setInterval(guardFocus,700);
+document.addEventListener('click',()=>setTimeout(guardFocus,40));
+
+/* ================= 初始化 ================= */
+function init(){
+  const types=[...new Set(LOGS.map(l=>l.type))];
+  document.getElementById('gType').innerHTML='<option value="">全部事件</option>'+types.map(t=>'<option>'+t+'</option>').join('');
+  CURR=RACKS[0].code;
+  renderDash();renderShift();renderMap();
+  inReset();outReset();
+}
+document.getElementById('fKw').addEventListener('keydown',e=>{if(e.key==='Enter')doFind();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAll();});
+init();
+</script>
+</body></html>

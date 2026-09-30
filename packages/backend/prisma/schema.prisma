@@ -1,0 +1,161 @@
+// OBE DUT Storage Management — PostgreSQL schema (POC v0.4)
+//
+// v0.4 儲位編碼與現場【已印出的一維條碼】完全一致：
+//   區域(WIP/FIN) - 台車號(2碼) - 層(2碼) - 機位(2碼)   例：FIN-04-01-04
+// 區域只剩兩區：WIP（未驗）/ FIN（已驗），兩區台車各自從 01 編起。
+// 儲位三狀態：EMPTY / OCCUPIED / BLOCKED（綠／紅／灰）
+// 機台四狀態：NEW / IN / OUT / LEFT
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SlotStatus {
+  EMPTY
+  OCCUPIED
+  BLOCKED
+}
+
+enum UnitState {
+  NEW
+  IN
+  OUT
+  LEFT
+}
+
+enum IssueStatus {
+  Open
+  Tracking
+  Closed
+}
+
+/// storage_area — 區域主檔（條碼區碼：WIP 未驗 / FIN 已驗）
+model Area {
+  code        String   @id // WIP / FIN
+  zh          String // 標籤中文面：未驗／已驗
+  name        String // 在製區（未驗）／已驗區
+  description String   @default("")
+  dutStatuses String[] // 屬於此區的 DUT 狀態，決定「建議區域」
+  sortOrder   Int      @default(0)
+  racks       Rack[]
+
+  @@map("storage_area")
+}
+
+/// storage_rack — 台車主檔；code = 區域-台車號（WIP-01、FIN-04）
+model Rack {
+  code      String   @id // WIP-01
+  areaCode  String
+  area      Area     @relation(fields: [areaCode], references: [code])
+  no        Int // 區內台車號，從 1 起
+  isActive  Boolean  @default(true)
+  note      String?
+  slots     Slot[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([areaCode, no])
+  @@map("storage_rack")
+}
+
+/// storage_slot — 儲位主檔（每台車 11 層 x 4 機位）；code 即一維條碼內容
+model Slot {
+  code              String     @id // FIN-04-01-04
+  rackCode          String
+  rack              Rack       @relation(fields: [rackCode], references: [code])
+  level             Int
+  pos               Int
+  status            SlotStatus @default(EMPTY)
+  unit              Unit?      @relation("UnitSlot")
+  blockReason       String?
+  blockBy           String?
+  blockAt           DateTime?
+  labelBroken       Boolean    @default(false)
+  labelBrokenReason String?
+  labelBrokenBy     String?
+  labelBrokenAt     DateTime?
+  updatedAt         DateTime   @updatedAt
+
+  @@unique([rackCode, level, pos])
+  @@index([rackCode])
+  @@index([status])
+  @@map("storage_slot")
+}
+
+/// dut_unit — 機台主檔與當前位置（本機主檔，日後由 SL2.0 同步）
+model Unit {
+  sn         String      @id // 14 碼
+  project    String
+  model      String
+  phase      String
+  owner      String
+  dutStatus  String
+  state      UnitState   @default(NEW)
+  slotCode   String?     @unique
+  slot       Slot?       @relation("UnitSlot", fields: [slotCode], references: [code])
+  isTemp     Boolean     @default(false)
+  inAt       DateTime?
+  lastMoveAt DateTime?
+  lastMoveBy String?
+  loanBy     String?
+  loanOutAt  DateTime?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  issues     UnitIssue[]
+
+  @@index([state])
+  @@index([dutStatus])
+  @@map("dut_unit")
+}
+
+/// OBE Issue 子表（隨機台走）
+model UnitIssue {
+  id               Int         @id @default(autoincrement())
+  unitSn           String
+  unit             Unit        @relation(fields: [unitSn], references: [sn], onDelete: Cascade)
+  title            String
+  rootCause        String
+  correctiveAction String
+  owner            String
+  status           IssueStatus @default(Open)
+  createdAt        DateTime    @default(now())
+
+  @@index([unitSn])
+  @@map("dut_issue")
+}
+
+/// dut_movement — 異動流水（不可改，audit trail）
+model Movement {
+  id       Int      @id @default(autoincrement())
+  sn       String // not FK-constrained: audit trail must survive unknown/rejected/deleted S/N; also holds rack code for 台車事件
+  fromSlot String?
+  toSlot   String?
+  action   String // 入庫上架 / 取機出庫 / 手動輸入儲位 / 臨時建檔 / 重新啟用 / 入庫拒收 / 入庫擋下 / 儲位停用 / ...
+  empNo    String
+  empName  String
+  station  String   @default("OBE-STN01")
+  note     String   @default("")
+  ts       DateTime @default(now())
+
+  @@index([sn])
+  @@index([ts])
+  @@index([action])
+  @@map("dut_movement")
+}
+
+/// scan_metric — 刷取覆蓋率（每站每日一列）
+model ScanMetric {
+  id         Int      @id @default(autoincrement())
+  date       DateTime @default(now())
+  station    String   @default("OBE-STN01")
+  scannedCnt Int      @default(0)
+  missedCnt  Int      @default(0)
+
+  @@index([date, station])
+  @@map("scan_metric")
+}
