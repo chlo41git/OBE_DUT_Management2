@@ -432,7 +432,7 @@ export default function MapPage() {
             )}
           </dl>
           <div style={{ marginTop: 12 }}>
-            <BarCode text={slotModal.code} width={210} height={40} />
+            <BarCode text={slotModal.code} width={300} height={45} />
           </div>
         </Modal>
       )}

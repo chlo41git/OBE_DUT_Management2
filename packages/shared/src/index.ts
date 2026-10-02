@@ -151,6 +151,8 @@ export interface SystemConfigDTO {
   staleDays: number;
   dedupSeconds: number;
   slotFormatHint: string; // 「FIN-04-01-04（區域-台車-層-機位）」
+  /** 刷退指令條碼內容（POC v04-1 CMD_OUT），刷到它才進入刷退模式 */
+  checkoutCommandCode: string;
 }
 
 // -------- request payloads --------
@@ -166,7 +168,7 @@ export interface CheckInCommitRequest {
 }
 
 export interface ManualSlotRequest {
-  mode: 'in' | 'out';
+  mode: 'in';
   code: string;
   reason: string;
 }
@@ -219,20 +221,28 @@ export interface CheckInCommitResult {
   message: string;
 }
 
-export type CheckOutSlotOutcome = 'OK' | 'EMPTY' | 'BLOCKED' | 'NOT_FOUND' | 'WRONG_ORDER' | 'INVALID_FORMAT';
+// -------- check-out（POC v04-1：刷退條碼 → 機台 S/N 即釋放） --------
 
-export interface CheckOutSlotResult {
-  outcome: CheckOutSlotOutcome;
+export type CheckOutUnitOutcome =
+  | 'RELEASED' // 已刷退，原儲位釋放為空位
+  | 'SLOT_CODE' // 刷到的是櫃位條碼：刷退改成刷機台 S/N
+  | 'UNKNOWN_SN' // 不在機台主檔
+  | 'ALREADY_OUT' // 已刷退過，不需重複
+  | 'LEFT_UNIT' // 已出貨或報廢
+  | 'NO_SLOT'; // 查不到它在哪一格
+
+export interface CheckOutUnitResult {
+  outcome: CheckOutUnitOutcome;
   message: string;
-  slot?: SlotDTO;
   unit?: UnitDTO;
+  /** RELEASED 時為被釋放的那一格（狀態已是 EMPTY） */
+  slot?: SlotDTO;
+  releasedAt?: string;
 }
 
-export interface CheckOutConfirmResult {
-  unit: UnitDTO;
-  slot: SlotDTO;
-  releasedAt: string;
-  message: string;
+export interface ManualSnRequest {
+  sn: string;
+  reason: string;
 }
 
 // -------- map page --------

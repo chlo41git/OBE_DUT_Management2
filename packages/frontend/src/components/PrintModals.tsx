@@ -6,7 +6,7 @@ import { pad2 } from './Tag';
 /** 櫃位標籤（1D Code128，比照現場已印出的樣式）。POC v0.4 printLabel() */
 export function PrintLabelModal({ slot, levels = 11, onClose }: { slot: SlotLocDTO; levels?: number; onClose: () => void }) {
   return (
-    <Modal title={`櫃位標籤 ${slot.code}`} onClose={onClose} buttons={[{ label: '關閉', onClick: onClose }]}>
+    <Modal title={`櫃位標籤 ${slot.code}`} width={560} onClose={onClose} buttons={[{ label: '關閉', onClick: onClose }]}>
       <div className="lblcard">
         <div style={{ textAlign: 'center' }}>
           <BarCode text={slot.code} width={230} height={46} />

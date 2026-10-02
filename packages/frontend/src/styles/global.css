@@ -140,7 +140,7 @@ label.f{display:block;font-size:11.5px;color:var(--ink2);margin:0 0 4px}
 .rackitem:hover{background:#f8fafc}
 .rackitem.on{background:#ecfdf5}
 .rackitem .nm{font-family:var(--mono);font-weight:600}
-.rackwrap{display:grid;grid-template-columns:220px 1fr;gap:14px}
+.rackwrap{display:grid;grid-template-columns:180px 1fr;gap:14px}
 @media(max-width:1000px){.rackwrap{grid-template-columns:1fr}}
 .modebtn.on{background:var(--nav);border-color:var(--nav);color:#fff}
 .cartgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(136px,1fr));gap:9px}
@@ -188,3 +188,17 @@ label.f{display:block;font-size:11.5px;color:var(--ink2);margin:0 0 4px}
 .lblcard{border:1px dashed #cbd5e1;border-radius:8px;padding:14px;background:#fff;display:flex;gap:16px;align-items:center;overflow:auto}
 .lblcard .zh{font-size:16px;font-weight:700;letter-spacing:1px;white-space:nowrap}
 .lblcard>div:last-child{min-width:230px}
+/* 查詢定位結果（POC v0.3 追加：燈號地圖） */
+.findres{font-size:12.5px;color:var(--ink2)}
+.findres b{color:var(--ink)}
+.findres .no{color:var(--red)}
+/* v04-1 追加：刷退指令條碼、刷退模式提示 */
+.cmdbox{margin-top:12px;border:2px dashed #cbd5e1;border-radius:10px;padding:12px 14px;background:#f8fafc;text-align:center;transition:.25s}
+.cmdbox.dim{opacity:.45;filter:grayscale(1)}
+.cmdttl{font-size:12.5px;font-weight:700;margin-bottom:8px}
+.cmdttl .muted{font-weight:400;font-size:11.5px}
+.outbanner{display:flex;align-items:center;gap:9px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;
+  border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12.5px}
+.outbanner b{font-size:13px}
+.outbanner .pulse{width:9px;height:9px;border-radius:50%;background:#10b981;animation:pl 1.2s ease-in-out infinite;flex:none}
+.card h3 .btn.sm{margin-left:auto}

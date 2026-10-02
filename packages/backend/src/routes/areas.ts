@@ -5,13 +5,19 @@ import { getOperator } from '../lib/operator';
 import { CFG, BLOCK_REASONS } from '../lib/areaDefs';
 import { SLOT_FORMAT_HINT } from '../lib/logic';
 import { createRack, freeCountByArea, listAreas, listRacks, toggleRack } from '../services/rackService';
+import { CHECKOUT_COMMAND_CODE } from '../services/checkoutService';
 
 export const areasRouter = Router();
 
 areasRouter.get(
   '/config',
   asyncHandler(async (_req, res) => {
-    const cfg: SystemConfigDTO & { blockReasons: string[] } = { ...CFG, slotFormatHint: SLOT_FORMAT_HINT, blockReasons: BLOCK_REASONS };
+    const cfg: SystemConfigDTO & { blockReasons: string[] } = {
+      ...CFG,
+      slotFormatHint: SLOT_FORMAT_HINT,
+      checkoutCommandCode: CHECKOUT_COMMAND_CODE,
+      blockReasons: BLOCK_REASONS,
+    };
     res.json(cfg);
   }),
 );

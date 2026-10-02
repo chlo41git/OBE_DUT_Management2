@@ -110,7 +110,50 @@ npm run dev:frontend     # vite，:5173，啟動訊息會列出 Network: http://
 - backend 正式模式用 `npm start -w @obe/backend`（＝ `node dist/server.js`）即可，不需要 `tsx`。`@obe/shared` 的 `main` 已指向編譯後的 `dist/index.js`，純 Node 載得起來（2026-09-24 驗證）。
   - 前提是 `packages/shared/dist` 存在。它被 gitignore，但 `npm install` 會經由 shared 的 `prepare` script 自動重建；手動重建是 `npm run build -w @obe/shared`。
   - 仍想用 `npx tsx src/server.ts` 跑也可以（免 build），只是現場機器就得整包帶原始碼。
-- 更新版本：`git pull` → `npm install` → `npm run build` → 重新啟動兩個程序。
+- 更新版本：`git pull` → `npm install` → `npm run build` → 重新啟動兩個程序（用 PM2 的話見下方）。
+
+#### 用 PM2 管理（取代上面兩個視窗）
+
+repo 根目錄的 `ecosystem.config.cjs` 定義了兩個程序，內容就是上面正式模式的兩個指令：
+
+| PM2 名稱 | cwd | 實際執行 |
+|---|---|---|
+| `obe-backend` | `packages/backend` | `node dist/server.js`（:4000） |
+| `obe-frontend` | `packages/frontend` | `node node_modules/vite/bin/vite.js preview`（:5173） |
+
+- backend 的 cwd 必須是 `packages/backend`：`server.ts` 用 `dotenv/config` 從**目前目錄**讀 `.env`，cwd 錯了就會連不上資料庫。
+- 兩個都直接用 `node` 執行 `.js`，不經過 `npm`／`npx`：Windows 上 PM2 無法可靠地啟動 `.cmd` shim。
+- 崩潰時自動重啟（間隔 3 秒，最多連續 10 次）；不監看檔案（`watch: false`）。
+
+安裝與啟動（一次性）：
+
+```powershell
+npm install -g pm2
+npm run build
+pm2 start ecosystem.config.cjs
+pm2 status                 # 兩個都要是 online
+pm2 save                   # 存下目前的程序清單，供開機時 pm2 resurrect 還原（見第 8 步）
+```
+
+日常操作：
+
+```powershell
+pm2 logs                   # 即時看兩個程序的輸出；pm2 logs obe-backend 只看一個
+pm2 restart all
+pm2 stop all
+```
+
+更新版本：
+
+```powershell
+git pull
+npm install
+pm2 stop obe-backend       # 一定要先停，否則 prisma generate 會因 DLL 被佔用而報 EPERM
+npm run build
+pm2 restart all
+```
+
+> 用 PM2 跑起來之後，**不要再另外執行** `npm start -w @obe/backend` 或 `npm run dev:*`：埠已被 PM2 的程序佔住，會失敗於 `EADDRINUSE`／`Port 5173 is already in use`。要改用開發模式時先 `pm2 stop all`。
 
 ### 7. Windows 防火牆放行 5173
 
@@ -130,7 +173,10 @@ New-NetFirewallRule -DisplayName "OBE DUT frontend 5173" `
 主機重開後、無人登入時也要能使用的話，擇一：
 
 - **工作排程器**：觸發程序設「開機時」，勾「不論使用者登入與否均執行」，分別排入 backend 與 frontend 的啟動指令（「開始位置」設為對應的 package 目錄）。
-- **NSSM／pm2**：把兩個指令包成 Windows 服務，程序崩潰時會自動重啟。
+- **PM2**（已照第 6 步 `pm2 start` + `pm2 save`）：PM2 在 Windows 上不會自己開機啟動（`pm2 startup` 不支援 Windows），擇一補上：
+  - 工作排程器：觸發程序「開機時」，勾「不論使用者登入與否均執行」，執行帳號用**當初執行 `pm2 save` 的那個帳號**（PM2 的程序清單存在該帳號的 `%USERPROFILE%\.pm2`），動作為 `pm2 resurrect`（程式填 `pm2.cmd` 的完整路徑，可用 `(Get-Command pm2.cmd).Source` 查）。
+  - 或安裝 [pm2-installer](https://github.com/jessety/pm2-installer)，把 PM2 註冊成 Windows 服務。注意它會用自己的 PM2_HOME，裝好後要在該環境下重新 `pm2 start ecosystem.config.cjs` + `pm2 save`。
+- **NSSM**：把兩個指令包成 Windows 服務，程序崩潰時會自動重啟。
 
 ### 9. 固定 IP
 
@@ -164,4 +210,5 @@ New-NetFirewallRule -DisplayName "OBE DUT frontend 5173" `
 | 頁面有出現，但一直停在「載入中」 | backend 沒在跑：app 主機 `netstat` 看不到 4000 → 看 backend 視窗的錯誤訊息；`Cannot find module '@obe/shared'` 就刪掉 `node_modules\@obe` 後重跑 `npm install`（另一個可能是 `packages/shared/dist` 沒建 → `npm run build -w @obe/shared`）；資料庫問題跑 `npm run db:check` |
 | `npm run dev:frontend` 報 `Port 5173 is already in use` | 有舊的 Vite 還在跑 → `netstat -ano \| findstr :5173` 找出 PID 後結束它（`strictPort` 刻意不自動換埠） |
 | `npm run build` 在 `modules transformed` 之後就結束，沒有任何錯誤訊息 | 專案路徑含中文 → 搬到純英數路徑，或用第 6 步的 `subst` 建置 |
-| `npm run build` 報 `EPERM … query_engine-windows.dll.node` | backend 還在跑、佔住 Prisma DLL → 先停掉 backend 再 build |
+| `npm run build` 報 `EPERM … query_engine-windows.dll.node` | backend 還在跑、佔住 Prisma DLL → 先停掉 backend 再 build（PM2：`pm2 stop obe-backend`；只殺行程沒用，PM2 會把它重啟） |
+| `pm2 status` 顯示 `errored` 或一直重啟 | `pm2 logs <名稱> --lines 50` 看錯誤；常見是還沒 `npm run build`（找不到 `dist/server.js` 或 `dist/index.html`）、`.env` 沒帶到 `packages/backend`、或埠被手動啟動的舊程序佔住 |

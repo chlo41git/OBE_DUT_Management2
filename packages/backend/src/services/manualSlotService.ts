@@ -6,10 +6,11 @@ import { logMovement } from './eventService';
 import type { Operator } from '../lib/operator';
 
 /**
- * 標籤破損，手動輸入儲位 — 標記「標籤待補印」並留稽核紀錄，之後前端照常走入庫／出庫流程。
+ * 標籤破損，手動輸入儲位 — 標記「標籤待補印」並留稽核紀錄，之後前端照常走入庫流程。
+ * （v04-1 起出庫改刷機台 S/N，出庫端改用 checkoutService.registerManualSn。）
  * Ported from POC v0.4 manualSlot().
  */
-export async function registerManualSlot(codeRaw: string, reasonRaw: string, mode: 'in' | 'out', operator: Operator) {
+export async function registerManualSlot(codeRaw: string, reasonRaw: string, operator: Operator) {
   const code = normSlot(codeRaw);
   const reason = reasonRaw.trim();
   const slot = await prisma.slot.findUnique({ where: { code } });
@@ -24,7 +25,7 @@ export async function registerManualSlot(codeRaw: string, reasonRaw: string, mod
     });
     await logMovement(
       tx,
-      { toSlot: code, action: '手動輸入儲位', note: `理由：${reason}（標籤待補印）｜${mode === 'in' ? '入庫' : '出庫'}` },
+      { toSlot: code, action: '手動輸入儲位', note: `理由：${reason}（標籤待補印）` },
       operator,
     );
     return s;

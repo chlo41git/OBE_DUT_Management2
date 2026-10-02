@@ -1,20 +1,22 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { getOperator } from '../lib/operator';
-import { confirmCheckOut, scanOutSlot } from '../services/checkoutService';
+import { checkoutByUnit, registerManualSn } from '../services/checkoutService';
 
 export const checkoutRouter = Router();
 
+/** 刷退：刷機台 S/N 即釋放（POC v04-1） */
 checkoutRouter.post(
-  '/checkout/scan-slot',
+  '/checkout/scan-unit',
   asyncHandler(async (req, res) => {
-    res.json(await scanOutSlot(String(req.body.code || '')));
+    res.json(await checkoutByUnit(String(req.body.sn || ''), getOperator(req)));
   }),
 );
 
+/** S/N 標籤破損手動輸入：只寫稽核紀錄 */
 checkoutRouter.post(
-  '/checkout/confirm',
+  '/checkout/manual-sn',
   asyncHandler(async (req, res) => {
-    res.json(await confirmCheckOut(String(req.body.slotCode || ''), getOperator(req)));
+    res.json(await registerManualSn(String(req.body.sn || ''), String(req.body.reason || ''), getOperator(req)));
   }),
 );

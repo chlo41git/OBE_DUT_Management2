@@ -9,7 +9,6 @@ manualSlotRouter.post(
   '/manual-slot',
   asyncHandler(async (req, res) => {
     const operator = getOperator(req);
-    const mode = req.body.mode === 'out' ? 'out' : 'in';
-    res.json(await registerManualSlot(String(req.body.code || ''), String(req.body.reason || ''), mode, operator));
+    res.json(await registerManualSlot(String(req.body.code || ''), String(req.body.reason || ''), operator));
   }),
 );

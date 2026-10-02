@@ -258,6 +258,19 @@ label.f{display:block;font-size:11.5px;color:var(--ink2);margin:0 0 4px}
 .lblcard>div:last-child{min-width:230px}
 #modal .mb .lblcard{overflow:auto}
 </style>
+<style>
+/* v0.5 追加：刷退指令條碼 */
+.cmdbox{margin-top:12px;border:2px dashed #cbd5e1;border-radius:10px;padding:12px 14px;background:#f8fafc;text-align:center;transition:.25s}
+.cmdbox.dim{opacity:.45;filter:grayscale(1)}
+.cmdttl{font-size:12.5px;font-weight:700;margin-bottom:8px}
+.cmdttl .muted{font-weight:400;font-size:11.5px}
+.bc{border:1px solid #e2e8f0;border-radius:4px;padding:5px 0;background:#fff;display:block;margin:0 auto}
+.outbanner{display:flex;align-items:center;gap:9px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;
+  border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12.5px}
+.outbanner b{font-size:13px}
+.outbanner .pulse{width:9px;height:9px;border-radius:50%;background:#10b981;animation:pl 1.2s ease-in-out infinite;flex:none}
+.card h3 .btn.sm{margin-left:auto}
+</style>
 <div class="app">
   <aside class="side">
     <div class="brand">
@@ -305,7 +318,7 @@ label.f{display:block;font-size:11.5px;color:var(--ink2);margin:0 0 4px}
                   <input type="text" id="inScan" placeholder="等待掃描…" autocomplete="off">
                 </div>
                 <div class="row" style="margin-top:10px">
-                  <button class="btn" onclick="manualSlot('in')">標籤破損，手動輸入儲位</button>
+                  <button class="btn" onclick="manualSlot()">標籤破損，手動輸入儲位</button>
                   <button class="btn" onclick="inReset()">重來</button>
                 </div>
               </div>
@@ -325,38 +338,49 @@ label.f{display:block;font-size:11.5px;color:var(--ink2);margin:0 0 4px}
         </div>
       </section>
 
-      <!-- 出庫：只刷櫃位條碼 -->
+      <!-- 出庫：刷退條碼 → 機台 S/N -->
       <section class="page" id="p-out">
         <div class="steps" id="outSteps">
-          <div class="step on"><b>Step 1</b>刷櫃位條碼</div>
-          <div class="step"><b>Step 2</b>確認取出（二次確認）</div>
-          <div class="step"><b>Step 3</b>釋放完成</div>
+          <div class="step on"><b>Step 1</b>刷「刷退條碼」啟用</div>
+          <div class="step"><b>Step 2</b>刷機台 S/N</div>
+          <div class="step"><b>Step 3</b>刷退完成</div>
         </div>
         <div class="scan">
           <div>
             <div class="card" style="margin-bottom:14px">
-              <h3>刷取區 <span class="hint">刷櫃位條碼 → 二次確認後才釋放</span></h3>
+              <h3>刷取區 <span class="hint">刷退條碼 → 機台 S/N · 2 秒內重複刷自動忽略</span>
+                <button class="btn sm" style="margin-left:auto" onclick="exitOutMode()">結束刷退</button></h3>
               <div class="bd">
+                <div class="outbanner" id="outBanner" style="display:none">
+                  <span class="pulse"></span><b>刷退模式啟用中</b>連續刷機台 S/N，每刷一台就釋放一格
+                </div>
                 <div class="scanbox act" id="outBox">
-                  <div class="cap" id="outCap">請刷「櫃位條碼」釋放該格</div>
-                  <input type="text" id="outScan" placeholder="等待掃描…" autocomplete="off">
+                  <div class="cap" id="outCap">請先刷下方「刷退條碼」啟用刷退</div>
+                  <input type="text" id="outScan" placeholder="請先刷刷退條碼…" autocomplete="off">
+                </div>
+                <div class="cmdbox" id="outCmdWrap">
+                  <div class="cmdttl">刷退條碼 <span class="muted">直接刷螢幕上這張，或刷貼在刷取站上印出來的那張</span></div>
+                  <div id="outCmdBar"></div>
+                  <div class="row" style="margin-top:8px">
+                    <button class="btn sm" onclick="printOutCmd()">列印刷退條碼</button>
+                  </div>
                 </div>
                 <div class="row" style="margin-top:10px">
-                  <button class="btn" onclick="manualSlot('out')">標籤破損，手動輸入儲位</button>
+                  <button class="btn" onclick="manualSN()">S/N 標籤破損，手動輸入</button>
                   <button class="btn" onclick="outReset()">重來</button>
                 </div>
               </div>
             </div>
-            <div class="card"><h3>取出的機台 <span class="hint">含 E-Safe Launch OBE Issue</span></h3>
+            <div class="card"><h3>刷退的機台 <span class="hint">含 E-Safe Launch OBE Issue</span></h3>
               <div class="bd" id="outInfo"><span class="muted small">尚未刷取</span></div></div>
           </div>
           <div>
             <div id="outMsg"></div>
             <div class="locpanel" id="outLoc">
-              <div class="muted small">釋放的櫃位 Released Location</div>
-              <div class="bigloc">— — —<small>刷櫃位條碼，確認後才釋放</small></div>
+              <div class="muted small">刷退的櫃位 Released Location</div>
+              <div class="bigloc">— — —<small>刷退條碼 → 機台 S/N</small></div>
             </div>
-            <div class="card" style="margin-top:14px"><h3>本班已出庫 <span class="hint" id="outShiftN">0 筆</span></h3>
+            <div class="card" style="margin-top:14px"><h3>本班已刷退 <span class="hint" id="outShiftN">0 筆</span></h3>
               <div class="tblwrap" style="max-height:210px" id="outShift"></div></div>
           </div>
         </div>
@@ -551,7 +575,7 @@ function toast(m,c){const d=document.createElement('div');d.className=c||'';d.te
 /* ================= 路由與共用 ================= */
 const TTL={dash:['戰情儀表板','OBE 區 DUT 即時在庫概況'],
  in:['入庫上架 Check-in','刷櫃位條碼 → 刷機台 S/N → 綁定完成（人員自由選空位）'],
- out:['取機出庫 Check-out','刷櫃位條碼 → 二次確認 → 釋放該格'],
+ out:['取機出庫 Check-out','刷「刷退條碼」啟用 → 刷機台 S/N → 該格自動釋放'],
  map:['找機台與儲位地圖','燈號即現況：紅＝已使用、綠＝空位；查詢命中會在圖上閃爍定位'],
  log:['事件紀錄','Audit Trail']};
 document.getElementById('nav').addEventListener('click',e=>{const a=e.target.closest('a');if(!a)return;go(a.dataset.p);});
@@ -636,7 +660,7 @@ function normSlot(c){
   return m?m[1]+'-'+pad(+m[2])+'-'+pad(+m[3])+'-'+pad(+m[4]):c;
 }
 const SLOTFMT='FIN-04-01-04（區域-台車-層-機位）';
-function manualSlot(mode){
+function manualSlot(){
   modal('標籤破損 — 手動輸入儲位',
    '<div class="msg warn"><b>此入口會留下稽核紀錄</b>手動輸入等於少了一次實體確認，必須填理由；該櫃位會記為「標籤待補印」。</div>'+
    '<label class="f">櫃位條碼（'+SLOTFMT+'）</label><input type="text" id="msCode" placeholder="FIN-04-01-04">'+
@@ -648,7 +672,7 @@ function manualSlot(mode){
       if(!r)return toast('請填理由','err');
       SLOTS[c].labelBroken={reason:r,by:opEmp(),at:new Date()};
       logEvent('手動輸入儲位','-',c,'理由：'+r+'（標籤待補印）');closeAll();
-      if(mode==='in')handleIn(c,true);else handleOut(c,true);}}]);
+      handleIn(c,true);}}]);
 }
 function freeByArea(){const m={WIP:0,FIN:0};
   Object.values(SLOTS).forEach(s=>{if(!s.sn&&!s.block&&rackOf(s.rack).active)m[s.area]++;});return m;}
@@ -788,60 +812,93 @@ function renderShift(){
    '</tbody></table>':'<div class="bd"><span class="muted small">本班尚無入庫紀錄</span></div>';}
 </script>
 <script>
-/* ================= 出庫：只刷櫃位條碼即釋放（含二次確認） ================= */
-let OUT={last:null,shift:[]};
+/* =========================================================
+   條碼產生：真實 Code128-B（螢幕上就能被條碼槍掃到）
+   ========================================================= */
+const C128=('212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 '+
+ '221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 '+
+ '221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 '+
+ '212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 '+
+ '231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 '+
+ '231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 '+
+ '314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 '+
+ '112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 '+
+ '111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 '+
+ '214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 '+
+ '114131 311141 411131 211412 211214 211232 2331112').split(/\s+/);
+function code128Vals(t){
+  const v=[104];                                  /* Start B */
+  for(let i=0;i<t.length;i++)v.push(t.charCodeAt(i)-32);
+  let sum=104;for(let i=1;i<v.length;i++)sum+=v[i]*i;
+  v.push(sum%103);v.push(106);                    /* 檢查碼 + Stop */
+  return v;}
+/* u＝模組寬（px）。螢幕掃描建議 ≥3px，列印可用 2px */
+function barSVG(txt,h,u){
+  u=u||3;const q=10*u;let x=0,r='';
+  code128Vals(txt).forEach(v=>{const p=C128[v];
+    for(let i=0;i<p.length;i++){const w=(+p[i])*u;
+      if(i%2===0)r+='<rect x="'+x+'" y="0" width="'+w+'" height="'+h+'"/>';
+      x+=w;}});
+  const W=x+q*2;
+  return '<svg class="bc" width="'+W+'" height="'+h+'" viewBox="0 0 '+W+' '+h+'" '+
+    'shape-rendering="crispEdges" style="background:#fff">'+
+    '<g transform="translate('+q+',0)" fill="#000">'+r+'</g></svg>';}
+
+/* =========================================================
+   出庫：刷「刷退條碼」啟用 → 刷機台 S/N 即刷退
+   ========================================================= */
+const CMD_OUT='OBE-OUT';          /* 刷退指令條碼內容 */
+let OUT={on:false,shift:[]};
 function outMsg(c,t,b){document.getElementById('outMsg').innerHTML=c?'<div class="msg '+c+'"><b>'+t+'</b>'+(b||'')+'</div>':'';}
+function outModeUI(){
+  document.getElementById('outCmdWrap').classList.toggle('dim',OUT.on);
+  document.getElementById('outBanner').style.display=OUT.on?'':'none';
+  document.getElementById('outCap').textContent=OUT.on?'刷退模式啟用中 — 請刷機台 S/N':'請先刷下方「刷退條碼」啟用刷退';
+  document.getElementById('outScan').placeholder=OUT.on?'掃描機台 S/N…':'請先刷刷退條碼…';
+  setSteps('outSteps',OUT.on?2:1);}
 function outReset(keep){
-  OUT.last=null;setSteps('outSteps',1);
-  document.getElementById('outCap').textContent='請刷「櫃位條碼」釋放該格';
-  document.getElementById('outScan').value='';document.getElementById('outScan').placeholder='等待掃描…';
+  OUT.on=false;outModeUI();
+  document.getElementById('outScan').value='';
   document.getElementById('outInfo').innerHTML='<span class="muted small">尚未刷取</span>';
   document.getElementById('outLoc').className='locpanel';
-  document.getElementById('outLoc').innerHTML='<div class="muted small">釋放的櫃位 Released Location</div>'+
-    '<div class="bigloc">— — —<small>刷櫃位條碼，確認後才釋放</small></div>';
+  document.getElementById('outLoc').innerHTML='<div class="muted small">刷退的櫃位 Released Location</div>'+
+    '<div class="bigloc">— — —<small>刷退條碼 → 機台 S/N</small></div>';
   if(!keep)outMsg(null);document.getElementById('outScan').focus();}
+function enterOutMode(){
+  OUT.on=true;outModeUI();
+  outMsg('ok','✔ 刷退模式已啟用','可以連續刷機台 S/N，每刷一台就釋放一格，不必再刷一次刷退條碼。結束請按右上角「結束刷退」。');
+  toast('刷退模式啟用','ok');document.getElementById('outScan').focus();}
+function exitOutMode(){const n=OUT.shift.length;outReset();
+  outMsg('info','已結束刷退模式','本班累計刷退 '+n+' 台。要再刷退請重新刷一次刷退條碼。');}
 document.getElementById('outScan').addEventListener('keydown',e=>{if(e.key!=='Enter')return;
   const v=e.target.value.trim().toUpperCase();e.target.value='';if(v)handleOut(v);});
 function handleOut(v,skipDedup){
   if(!skipDedup&&dedup(v))return;
-  v=normSlot(v);
-  if(!SLOTRE.test(v)){
-    const u=bySN[v];
-    if(u)return outMsg('warn','本版出庫只需刷「櫃位條碼」',
-      u.state==='IN'&&u.loc?('['+u.sn+'] 目前在 '+u.loc+'（'+locLabelZh(u.loc)+'），請到現場刷該格的櫃位條碼即可釋放。'):
-      ('['+u.sn+'] 目前狀態為'+(u.state==='OUT'?'已取出':'已離場')+'，不在架上。'));
-    return outMsg('err','無法辨識的條碼','櫃位條碼格式為 '+SLOTFMT+'；標籤破損請按「手動輸入儲位」。');}
-  const s=SLOTS[v];
-  if(!s)return outMsg('err','查無此櫃位條碼','系統無 ['+esc(v)+']。');
-  if(s.block)return outMsg('err','此櫃位為停用中','['+s.k+'] '+esc(s.block.reason)+'，本來就不會有機台。');
-  if(!s.sn)return outMsg('err','此櫃位系統顯示為空','['+s.k+'] 沒有綁定任何機台。若現場實際有機台，請改走「入庫上架」把它綁上去。');
-  confirmRelease(s);
+  v=(v||'').trim().toUpperCase();
+  if(v===CMD_OUT)return enterOutMode();
+  if(!OUT.on)return outMsg('warn','請先刷「刷退條碼」','畫面下方那張條碼就可以直接刷，或刷貼在刷取站上的那張。啟用後才會接受機台 S/N。');
+  const sv=normSlot(v);
+  if(SLOTRE.test(sv)){
+    const s=SLOTS[sv];
+    return outMsg('warn','刷退改成刷機台 S/N，不是刷櫃位',
+      s?(s.sn?('['+sv+'] 目前放的是 '+s.sn+'，請直接刷機台上的 S/N 條碼。'):
+            ('['+sv+'] 系統顯示為空位。')):('查無 ['+esc(sv)+'] 這個櫃位條碼。'));}
+  const u=bySN[v];
+  if(!u)return outMsg('err','查無此機台 S/N','['+esc(v)+'] 不在機台主檔。請確認刷到的是機台的 S/N 條碼，不是包裝或治具上的碼。');
+  if(u.state==='OUT')return outMsg('warn','這台已經刷退過了',
+    '['+u.sn+'] 由 '+esc(u.loan.by)+' 於 '+dstr(u.loan.out)+' 取走，目前不在架上，不需重複刷退。');
+  if(u.state==='LEFT')return outMsg('err','此機台已離場','['+u.sn+'] 已出貨或報廢，不在管理範圍。');
+  if(!u.loc||!SLOTS[u.loc])return outMsg('err','此機台沒有儲位紀錄',
+    '['+u.sn+'] 系統查不到它在哪一格，可能是上架時沒刷櫃位。請改走「入庫上架」先把它綁到實際位置。');
+  releaseUnit(u);
 }
-function confirmRelease(s){
-  const u=bySN[s.sn],oi=openIssues(u);
-  modal('確認取出？',
-   '<div class="msg warn" style="margin-bottom:10px"><b>此動作會把櫃位釋放為空位</b>請先確認手上要取走的就是這一台，避免誤刷。</div>'+
-   '<div style="text-align:center;border:1px solid var(--line);border-radius:10px;padding:16px 12px;background:#f8fafc">'+
-     '<div class="muted small">櫃位條碼</div>'+
-     '<div class="mono" style="font-size:30px;font-weight:800;letter-spacing:1px">'+s.k+'</div>'+
-     '<div class="small" style="margin-top:4px">'+locLabelZh(s.k)+'</div>'+
-     '<div class="muted small" style="margin-top:12px">機台 S/N</div>'+
-     '<div class="mono" style="font-size:22px;font-weight:700">'+u.sn+'</div></div>'+
-   (oi.length?'<div class="msg err" style="margin-top:10px"><b>⚠ 此機台有 '+oi.length+' 筆未結 OBE Issue</b>'+
-     'Owner（'+oi.map(i=>i.owner).join('、')+'）會在取出後收到通知。</div>':''),
-   [{t:'取消，不取出',c:'btn',f:()=>{closeAll();outReset();toast('已取消');}},
-    {t:'確認取出',c:'btn pri',f:()=>{closeAll();releaseSlot(s);}}]);
-}
-function releaseSlot(s){
-  const u=bySN[s.sn],now=new Date();
-  s.sn=null;
-  u.state='OUT';u.loc=null;u.lastMove=now;
-  u.loan={by:opEmp(),out:now};
+function releaseUnit(u){
+  const s=SLOTS[u.loc],k=s.k,now=new Date();
+  s.sn=null;u.state='OUT';u.loc=null;u.lastMove=now;u.loan={by:opEmp(),out:now};
   SCAN.covered++;
-  logEvent('取機出庫',u.sn,s.k,'刷櫃位條碼並二次確認後釋放');
-  OUT.last={slot:s,u,at:now};
+  logEvent('取機出庫',u.sn,k,'刷退條碼 ＋ 刷機台 S/N 釋放');
   setSteps('outSteps',3);
-  OUT.shift.unshift({t:now,sn:u.sn,loc:s.k});
+  OUT.shift.unshift({t:now,sn:u.sn,loc:k});
   document.getElementById('outShiftN').textContent=OUT.shift.length+' 筆';
   document.getElementById('outShift').innerHTML='<table><thead><tr><th>時間</th><th>S/N</th><th>原櫃位條碼</th><th>操作員</th></tr></thead><tbody>'+
     OUT.shift.map(r=>'<tr><td class="mono">'+dstr(r.t)+'</td><td class="mono">'+r.sn+'</td><td class="mono">'+r.loc+'</td>'+
@@ -850,16 +907,40 @@ function releaseSlot(s){
   const oi=openIssues(u);
   document.getElementById('outLoc').className='locpanel go';
   document.getElementById('outLoc').innerHTML=
-    '<div class="muted small">✔ 已釋放 Released</div>'+
-    '<div class="bigloc">'+s.k+'<small>'+locLabelZh(s.k)+' 現為空位</small></div>'+
-    '<div class="row" style="justify-content:center;margin-top:8px">'+
-      '<span class="tag t-gray mono">'+u.sn+'</span></div>';
+    '<div class="muted small">✔ 已刷退，該格恢復為空位</div>'+
+    '<div class="bigloc">'+k+'<small>'+locLabelZh(k)+'</small></div>'+
+    '<div class="row" style="justify-content:center;margin-top:8px"><span class="tag t-gray mono">'+u.sn+'</span></div>';
   outMsg(oi.length?'warn':'ok',
-    oi.length?'⚠ 已釋放，但此機台有 '+oi.length+' 筆未結 OBE Issue':'✔ 已釋放此櫃位',
-    '取走的是 '+u.sn+'　由 '+esc(opEmp())+' 於 '+dstr(now)+' 取出'+
-    (oi.length?('。Issue Owner（'+oi.map(i=>i.owner).join('、')+'）會收到通知。'):'。'));
-  toast('已釋放 '+s.k,'ok');
+    oi.length?'⚠ 已刷退，但此機台有 '+oi.length+' 筆未結 OBE Issue':'✔ 已刷退 '+u.sn,
+    '原位置 '+k+'（'+locLabelZh(k)+'）已釋放為空位，由 '+esc(opEmp())+' 於 '+dstr(now)+' 取出。'+
+    (oi.length?('Issue Owner（'+oi.map(i=>i.owner).join('、')+'）會收到通知。'):'可以接著刷下一台。'));
+  toast('已刷退 '+u.sn,'ok');
+  setTimeout(()=>{document.getElementById('outScan').focus();},60);
 }
+function manualSN(){
+  modal('S/N 標籤破損 — 手動輸入機台 S/N',
+   '<div class="msg warn"><b>此入口會留下稽核紀錄</b>手動輸入少了一次實體確認，必須填理由。</div>'+
+   '<label class="f">機台 S/N（14 碼）</label><input type="text" id="mnSN" placeholder="80699499000005">'+
+   '<label class="f" style="margin-top:10px">理由（必填）</label><input type="text" id="mnR" placeholder="例：S/N 標籤磨損掃不到">',
+   [{t:'取消',c:'btn',f:closeAll},
+    {t:'確認',c:'btn pri',f:()=>{
+      const sn=(document.getElementById('mnSN').value||'').trim().toUpperCase();
+      const r=(document.getElementById('mnR').value||'').trim();
+      if(!bySN[sn])return toast('查無此 S/N','err');
+      if(!r)return toast('請填理由','err');
+      logEvent('手動輸入 S/N',sn,'-','刷退｜理由：'+r);
+      closeAll();OUT.on=true;outModeUI();handleOut(sn,true);}}]);
+}
+function printOutCmd(){
+  modal('刷退條碼（可列印貼在刷取站）',
+   '<div class="lblcard"><div style="text-align:center">'+barSVG(CMD_OUT,56,3)+
+     '<div class="mono" style="font-size:19px;font-weight:800;letter-spacing:2px;margin-top:5px">'+CMD_OUT+'</div></div>'+
+   '<div><div class="zh">刷　退</div>'+
+     '<div class="small muted" style="margin-top:6px">條碼內容（1D Code128）：<b class="mono">'+CMD_OUT+'</b><br>'+
+     '刷這張後，接著刷機台 S/N 即完成刷退</div></div></div>'+
+   '<div class="msg info" style="margin-top:10px"><b>這是一張「指令條碼」，不是儲位</b>'+
+   '它不代表任何櫃位，只是告訴系統「接下來要刷退」。建議印兩張：一張貼在刷取站桌面，一張貼在推車把手上。</div>',
+   [{t:'關閉',c:'btn',f:closeAll}]);}
 function fillSel(id,arr,ph){const el=document.getElementById(id);
   el.innerHTML='<option value="">'+ph+'</option>'+arr.map(a=>'<option>'+a+'</option>').join('');}
 
@@ -871,7 +952,7 @@ function showUnit(sn){
    '<h4 style="margin:16px 0 6px;font-size:13px">位置狀態</h4>'+
    (u.state==='IN'&&u.loc?'<div class="msg ok"><b>在庫 '+u.loc+'</b>'+locLabelZh(u.loc)+'｜已放 '+days(u.lastMove)+' 天'+
       (areaMismatch(u)?'<br><span class="tag t-violet">區域不符：建議 '+areaForUnit(u)+'，下次異動時歸位</span>':'')+'</div>':
-    u.state==='OUT'?'<div class="msg warn"><b>已取出</b>由 '+esc(u.loan.by)+' 於 '+dstr(u.loan.out)+' 取出（離架 '+days(u.loan.out)+' 天）</div>':
+    u.state==='OUT'?'<div class="msg warn"><b>已刷退取出</b>由 '+esc(u.loan.by)+' 於 '+dstr(u.loan.out)+' 取出（離架 '+days(u.loan.out)+' 天）</div>':
     '<div class="msg err"><b>已離場</b>已出貨或報廢；要再入庫需先「重新啟用」</div>')+
    '<h4 style="margin:16px 0 6px;font-size:13px">異動履歷</h4><ul class="tl">'+
    (ev.length?ev.map(l=>'<li><div class="tm">'+dstr(l.t)+'</div><b>'+l.type+'</b> '+(l.loc!=='-'?'<span class="mono">'+l.loc+'</span> ':'')+
@@ -880,19 +961,11 @@ function showUnit(sn){
      '<button class="btn" onclick="printLabel(\''+u.loc+'\')">檢視櫃位標籤</button></div>':''));
 }
 
-/* ================= 櫃位標籤（1D 條碼，比照現場已印出的樣式） ================= */
-function barHTML(txt,h){
-  let s=0;for(let i=0;i<txt.length;i++)s=(s*31+txt.charCodeAt(i))>>>0;
-  let out='<i style="width:2px;height:'+h+'px"></i><i style="width:1px;height:'+h+'px;background:#fff"></i><i style="width:1px;height:'+h+'px"></i>';
-  for(let i=0;i<58;i++){s=(s*1103515245+12345)>>>0;
-    const w=1+((s>>13)&3),white=1+((s>>19)&2);
-    out+='<i style="width:'+w+'px;height:'+h+'px"></i><i style="width:'+white+'px;height:'+h+'px;background:#fff"></i>';}
-  out+='<i style="width:1px;height:'+h+'px"></i><i style="width:1px;height:'+h+'px;background:#fff"></i><i style="width:2px;height:'+h+'px"></i>';
-  return '<div class="bars">'+out+'</div>';}
+/* ================= 櫃位標籤 ================= */
 function printLabel(k){
   const s=SLOTS[k];if(!s)return;
   modal('櫃位標籤 '+k,
-    '<div class="lblcard"><div style="text-align:center">'+barHTML(k,46)+
+    '<div class="lblcard"><div style="text-align:center">'+barSVG(k,52,2.4)+
       '<div class="mono" style="font-size:17px;font-weight:800;letter-spacing:2px;margin-top:5px">'+k+'</div></div>'+
     '<div><div class="zh">'+locLabelZh(k)+'</div>'+
       '<div class="small muted" style="margin-top:6px">條碼內容（1D Code128）：<b class="mono">'+k+'</b><br>'+
@@ -1012,7 +1085,7 @@ function slotClick(k){
     (s.block?'<span class="tag t-gray">灰燈・停用</span> '+esc(s.block.reason):
      '<span class="tag t-green">綠燈・空位</span>')+'</dd>'+
     (s.labelBroken?'<dt>標籤</dt><dd><span class="tag t-amber">待補印</span> '+esc(s.labelBroken.reason)+'</dd>':'')+
-    '</dl><div style="margin-top:12px">'+barHTML(k,40)+'</div>',
+    '</dl><div style="margin-top:12px">'+barSVG(k,44,2.4)+'</div>',
     [{t:'檢視標籤',c:'btn',f:()=>printLabel(k)},
      {t:s.block?'解除停用':'標記停用（治具盤／破損）',c:'btn '+(s.block?'':'dgr'),f:()=>{
         if(s.block){s.block=null;logEvent('儲位解除停用','-',k,'恢復可用');closeAll();renderMap();toast('已解除停用','ok');}
@@ -1069,6 +1142,7 @@ function init(){
   const types=[...new Set(LOGS.map(l=>l.type))];
   document.getElementById('gType').innerHTML='<option value="">全部事件</option>'+types.map(t=>'<option>'+t+'</option>').join('');
   CURR=RACKS[0].code;
+  document.getElementById('outCmdBar').innerHTML=barSVG(CMD_OUT,70,3.8);
   renderDash();renderShift();renderMap();
   inReset();outReset();
 }

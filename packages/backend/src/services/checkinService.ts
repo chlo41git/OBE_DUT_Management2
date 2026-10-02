@@ -7,7 +7,7 @@ import type {
 import { prisma } from '../db/prisma';
 import { daysSince, isSlotCode, normSlot, operatorLabel, SLOT_FORMAT_HINT, slotLoc, suggestArea } from '../lib/logic';
 import { areaDef } from '../lib/areaDefs';
-import { badRequest } from '../lib/httpError';
+import { badRequest, conflict } from '../lib/httpError';
 import { toSlotDTO, toUnitDTO } from '../lib/mappers';
 import { bumpScan, logMovement } from './eventService';
 import type { Operator } from '../lib/operator';
@@ -82,6 +82,11 @@ export async function commitCheckIn(params: CheckInCommitRequest, operator: Oper
 
   return prisma.$transaction(async (tx) => {
     const slot = await assertSlotPlaceable(tx, slotCode);
+    // 防重複送出：條件式搶占目標儲位。同時送達的重複請求會排隊等同一列的鎖，
+    // 後到者重新評估 WHERE 時已非 EMPTY（count = 0），整筆交易回滾。
+    const claimed = await tx.slot.updateMany({ where: { code: slotCode, status: 'EMPTY' }, data: { status: 'OCCUPIED' } });
+    if (claimed.count !== 1) throw conflict('SLOT_OCCUPIED', `[${slotCode}] 已被佔用（可能是重複送出），請重新刷櫃位`);
+
     let unit = await tx.unit.findUnique({ where: { sn }, include: { issues: true } });
     let how = '';
 
@@ -116,10 +121,16 @@ export async function commitCheckIn(params: CheckInCommitRequest, operator: Oper
 
     const now = new Date();
     const fromSlot = unit.state === 'IN' && unit.slotCode !== slotCode ? unit.slotCode : null;
+    // 樂觀鎖：機台狀態／位置必須仍是剛才讀到的值，否則代表另一筆交易已搶先異動（例如同一台同時綁兩格）
+    const guard = { sn, state: unit.state, slotCode: unit.slotCode };
+    const stale = () => conflict('UNIT_CHANGED', `[${sn}] 狀態已被其他操作更新，請重新刷取`);
     // 先解除原位綁定，避免 slotCode unique 與新位互撞
-    if (fromSlot) await tx.unit.update({ where: { sn }, data: { slotCode: null } });
-    const updatedUnit = await tx.unit.update({
-      where: { sn },
+    if (fromSlot) {
+      if ((await tx.unit.updateMany({ where: guard, data: { slotCode: null } })).count !== 1) throw stale();
+      guard.slotCode = null;
+    }
+    const bound = await tx.unit.updateMany({
+      where: guard,
       data: {
         slotCode,
         state: 'IN',
@@ -129,13 +140,10 @@ export async function commitCheckIn(params: CheckInCommitRequest, operator: Oper
         loanBy: null,
         loanOutAt: null,
       },
-      include: { issues: true },
     });
-    const updatedSlot = await tx.slot.update({
-      where: { code: slotCode },
-      data: { status: 'OCCUPIED' },
-      include: { rack: true, unit: true },
-    });
+    if (bound.count !== 1) throw stale();
+    const updatedUnit = await tx.unit.findUniqueOrThrow({ where: { sn }, include: { issues: true } });
+    const updatedSlot = await tx.slot.findUniqueOrThrow({ where: { code: slotCode }, include: { rack: true, unit: true } });
 
     const want = suggestArea(updatedUnit.dutStatus);
     const got = slot.rack.areaCode;

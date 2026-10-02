@@ -6,8 +6,8 @@ import { useToast } from './Toast';
 
 export const SLOT_FORMAT_HINT = 'FIN-04-01-04（區域-台車-層-機位）';
 
-/** 標籤破損 — 手動輸入儲位（入庫／出庫共用）。POC v0.4 manualSlot() */
-export function ManualSlotModal({ mode, onClose, onDone }: { mode: 'in' | 'out'; onClose: () => void; onDone: (slot: SlotDTO) => void }) {
+/** 標籤破損 — 手動輸入儲位（入庫用；v04-1 起出庫改為手動輸入 S/N）。POC v04-1 manualSlot() */
+export function ManualSlotModal({ onClose, onDone }: { onClose: () => void; onDone: (slot: SlotDTO) => void }) {
   const [code, setCode] = useState('');
   const [reason, setReason] = useState('');
   const toast = useToast();
@@ -16,7 +16,7 @@ export function ManualSlotModal({ mode, onClose, onDone }: { mode: 'in' | 'out';
     if (!code.trim()) return toast('查無此櫃位條碼', 'err');
     if (!reason.trim()) return toast('請填理由', 'err');
     try {
-      const s = await api.manualSlot({ mode, code, reason });
+      const s = await api.manualSlot({ mode: 'in', code, reason });
       onDone(s);
     } catch (e) {
       toast(e instanceof ApiError ? e.message : '發生錯誤', 'err');

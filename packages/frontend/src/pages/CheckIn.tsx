@@ -49,6 +49,8 @@ export default function CheckIn() {
   const [shift, setShift] = useState<ShiftRow[]>([]);
   const [freeByArea, setFreeByArea] = useState<Record<string, number>>({});
   const [manualOpen, setManualOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const { data: config } = useQuery({ queryKey: ['config'], queryFn: api.config });
@@ -144,7 +146,10 @@ export default function CheckIn() {
   }
 
   async function doCommit(sn: string, decision?: CheckInDecision, rsn?: string) {
-    if (!slot) return;
+    // 防重複送出：ref 同步上鎖（連點／連按 Enter 時 state 還沒重繪就會再進來）
+    if (!slot || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
       const r = await api.checkinCommit({ slotCode: slot.code, sn, decision, reason: rsn });
       setModal(null);
@@ -166,6 +171,13 @@ export default function CheckIn() {
       setMsgs(done);
     } catch (e) {
       toast(e instanceof ApiError ? e.message : '發生錯誤', 'err');
+      if (e instanceof ApiError && e.status === 409) {
+        setModal(null);
+        reset(true);
+      }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   }
 
@@ -350,8 +362,8 @@ export default function CheckIn() {
           title="未建檔 S/N"
           onClose={() => setModal(null)}
           buttons={[
-            { label: '拒收退回', onClick: () => doReject(modal.sn) },
-            { label: '臨時建檔並上架', className: 'btn pri', onClick: () => doCommit(modal.sn, 'TEMP_CREATE') },
+            { label: '拒收退回', onClick: () => doReject(modal.sn), disabled: submitting },
+            { label: '臨時建檔並上架', className: 'btn pri', onClick: () => doCommit(modal.sn, 'TEMP_CREATE'), disabled: submitting },
           ]}
         >
           <div className="msg err">
@@ -367,9 +379,10 @@ export default function CheckIn() {
           title="此機台已離場"
           onClose={() => setModal(null)}
           buttons={[
-            { label: '擋下，不收', onClick: () => doBlockLeft(modal.sn) },
+            { label: '擋下，不收', onClick: () => doBlockLeft(modal.sn), disabled: submitting },
             {
               label: '重新啟用並上架',
+              disabled: submitting,
               className: 'btn pri',
               onClick: () => {
                 if (!reason.trim()) return toast('請填理由', 'err');
@@ -402,7 +415,7 @@ export default function CheckIn() {
                 reset();
               },
             },
-            { label: '確認移位到此格', className: 'btn pri', onClick: () => doCommit(modal.sn, 'CONFIRM_MOVE') },
+            { label: '確認移位到此格', className: 'btn pri', onClick: () => doCommit(modal.sn, 'CONFIRM_MOVE'), disabled: submitting },
           ]}
         >
           <div className="msg warn">
@@ -418,7 +431,6 @@ export default function CheckIn() {
 
       {manualOpen && (
         <ManualSlotModal
-          mode="in"
           onClose={() => setManualOpen(false)}
           onDone={(s) => {
             setManualOpen(false);

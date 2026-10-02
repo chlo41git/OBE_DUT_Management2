@@ -44,7 +44,7 @@ export function UnitDrawer({ sn, onClose }: { sn: string; onClose: () => void })
         )}
         {unit.state === 'OUT' && (
           <div className="msg warn">
-            <b>已取出</b>由 {unit.loanBy} 於 {formatDateTime(unit.loanOutAt)} 取出（離架 {daysSince(unit.loanOutAt)} 天）
+            <b>已刷退取出</b>由 {unit.loanBy} 於 {formatDateTime(unit.loanOutAt)} 取出（離架 {daysSince(unit.loanOutAt)} 天）
           </div>
         )}
         {unit.state === 'LEFT' && (

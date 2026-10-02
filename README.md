@@ -1,6 +1,6 @@
 # OBE DUT 儲位管理系統 v0.4
 
-本專案是 `OBE_DUT_儲位管理系統_POC_v04.html` 的正式化實作，以 v0.3 版系統（`OBE_DUT_Management - 20260929`）的 UI/UX 與程式結構為基礎改寫。
+本專案是 `OBE_DUT_儲位管理系統_POC_v04.html` 的正式化實作（取機出庫依 `POC_v04-1.html` 更新），以 v0.3 版系統（`OBE_DUT_Management - 20260929`）的 UI/UX 與程式結構為基礎改寫。
 
 | 模組 | 技術 |
 |---|---|
@@ -19,6 +19,7 @@
 | 機台狀態 | NEW/IN/OUT/MISSING/LEFT | **NEW/IN/OUT/LEFT**（移除失蹤＋異常單） |
 | 頁面 | 10 頁 | **5 頁**：入庫上架、取機出庫、找機台與儲位地圖、戰情儀表板、事件紀錄 |
 | 移除 | — | 異常單、待補清單、機台主檔、規則設定、設計說明與待決、離線模擬、模擬刷取按鈕 |
+| 出庫（v04-1） | 刷櫃位 → 二次確認 → 釋放 | **刷「刷退條碼」OBE-OUT 啟用 → 連續刷機台 S/N 即釋放**；S/N 標籤破損可手動輸入；可列印刷退條碼 |
 | 新增 | — | 條碼槍焦點守門（入庫／出庫頁自動把焦點拉回刷取框）、儀表板呆滯 KPI |
 
 ## 資料模型（`packages/backend/prisma/schema.prisma`）
@@ -63,7 +64,8 @@ pgAdmin 4 建帳號／資料庫、遠端資料庫、`pg_hba.conf` 設定見 [doc
 | GET | `/units/:sn` | 機台明細 |
 | POST | `/checkin/scan-slot` → `/checkin/scan-unit` → `/checkin/commit` | 入庫：先櫃位、後機台（dry-run + commit） |
 | POST | `/checkin/reject`、`/checkin/block-left` | 未建檔拒收、已離場擋下（只留稽核） |
-| POST | `/checkout/scan-slot` → `/checkout/confirm` | 出庫：刷櫃位 → 二次確認 → 釋放 |
+| POST | `/checkout/scan-unit` | 出庫（v04-1）：前端刷「刷退條碼」`OBE-OUT` 啟用刷退模式後，連續刷機台 S/N，每刷一台即釋放其儲位（無二次確認；條件式更新防重複送出） |
+| POST | `/checkout/manual-sn` | S/N 標籤破損手動輸入（只寫「手動輸入 S/N」稽核紀錄） |
 | POST | `/manual-slot` | 標籤破損手動輸入（標記待補印＋稽核） |
 | GET | `/events?type=&kw=&sn=`、`/events/types` | 事件紀錄 |
 | GET | `/dashboard` | 儀表板 |

@@ -6,7 +6,7 @@ import { Modal } from './Modal';
 const TTL: Record<string, [string, string]> = {
   '/dash': ['戰情儀表板', 'OBE 區 DUT 即時在庫概況'],
   '/in': ['入庫上架 Check-in', '刷櫃位條碼 → 刷機台 S/N → 綁定完成（人員自由選空位）'],
-  '/out': ['取機出庫 Check-out', '刷櫃位條碼 → 二次確認 → 釋放該格'],
+  '/out': ['取機出庫 Check-out', '刷「刷退條碼」啟用 → 刷機台 S/N → 該格自動釋放'],
   '/map': ['找機台與儲位地圖', '燈號即現況：紅＝已使用、綠＝空位；查詢命中會在圖上閃爍定位'],
   '/log': ['事件紀錄', 'Audit Trail'],
 };
@@ -58,7 +58,7 @@ export function Layout() {
         <div className="sidefoot">
           條碼格式 <b>WIP／FIN-台車-層-機位</b>
           <br />
-          React + TS ／ Node + TS ／ PostgreSQL
+          React+TS ／ Node+TS ／ PostgreSQL
           <br />
           OBE_DUT_儲位管理系統 POC v0.4 移植
         </div>

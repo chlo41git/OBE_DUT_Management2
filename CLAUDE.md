@@ -4,7 +4,7 @@
 
 ## 這是什麼專案
 
-以 React + TypeScript + Node/Express + PostgreSQL 實作 `OBE_DUT_儲位管理系統_POC_v04.html` —— 單檔 HTML/JS 的 DUT（測試機台）儲位管理 POC。**POC v04 檔案本身就是規格書**：功能定義不明確或收到 bug 回報時，先讀 POC 裡對應的函式（`inSlotScan`、`inUnitScan`、`commitIn`、`handleOut`、`releaseSlot`、`renderMap`、`renderDash`…），它是預期行為、文案與排版的事實來源。`OBE_DUT_儲位管理系統_POC_v03.html` 只是歷史基準，不要照它改。
+以 React + TypeScript + Node/Express + PostgreSQL 實作 `OBE_DUT_儲位管理系統_POC_v04-1.html` —— 單檔 HTML/JS 的 DUT（測試機台）儲位管理 POC。**POC v04-1 檔案本身就是規格書**（它是 v04 加上取機出庫改版的完整版；原 `POC_v04.html` 已從 repo 移除，需要時從 git 歷史 `d5f498a` 取回）：功能定義不明確或收到 bug 回報時，先讀 POC 裡對應的函式（`inSlotScan`、`inUnitScan`、`commitIn`、`handleOut`、`releaseUnit`、`renderMap`、`renderDash`…），它是預期行為、文案與排版的事實來源。`OBE_DUT_儲位管理系統_POC_v03.html` 只是歷史基準，不要照它改。
 
 本專案是從 v0.3 版系統（`D:\2026\倉儲管理\OBE_DUT_Management - 20260929`）複製後改寫，保留其程式結構與 UI/UX，並依 v04 **縮減功能**：只剩 入庫上架 `/in`、取機出庫 `/out`、找機台與儲位地圖 `/map`、戰情儀表板 `/dash`、事件紀錄 `/log`。異常單、待補清單、機台主檔、規則設定、設計說明、離線模擬、模擬刷取按鈕、`MISSING` 狀態都已**刻意移除**，不要加回來（除非使用者要求）。
 
@@ -101,9 +101,10 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
 
 Route（`src/routes/*.ts`）很薄：解析 body/query → 呼叫 `src/services/*.ts` → `res.json()`。商業邏輯與 Prisma 查詢都在 service，多步驟寫入用 `prisma.$transaction`。
 
-入庫／出庫拆成**試跑（dry-run）＋提交（commit）**，因為 UI 要先跳確認 modal：
+入庫拆成**試跑（dry-run）＋提交（commit）**，因為 UI 要先跳確認 modal；出庫（v04-1）則是單步：
 - `checkinService.scanSlot()` → `scanUnit()`（唯讀，回傳 outcome：`OK`/`RETURN`/`UNKNOWN_SN`/`LEFT_UNIT`/`NEED_MOVE_CONFIRM`/`ALREADY_HERE`/`SLOT_RESCAN`）→ `commitCheckIn()`（可帶 `decision`：`TEMP_CREATE`/`REACTIVATE`/`CONFIRM_MOVE`）。`rejectCheckIn`／`blockLeftCheckIn` 只寫稽核。
-- `checkoutService.scanOutSlot()`（唯讀）→ `confirmCheckOut()`（釋放）。
+- `checkoutService.checkoutByUnit()`：刷機台 S/N 即釋放其儲位，無二次確認。「刷退模式」（刷到指令條碼 `OBE-OUT`，由 `GET /api/config` 的 `checkoutCommandCode` 提供）**只存在前端**，後端每次獨立檢查。`registerManualSn()` 只寫「手動輸入 S/N」稽核（使用者決定不加 S/N 補印欄位）。
+- 防重複送出：入庫 commit、出庫釋放都用 `updateMany` 條件式更新搶占（count≠1 → 409），前端出庫掃描以 promise 佇列依序處理（不漏刷、不併發）。
 - outcome 型別在 `packages/shared/src/index.ts`，前端以 switch 處理 —— 新增邊界情境要同時改 shared 型別 + service + 前端 modal。
 - 移位時先把 unit 的 `slotCode` 清成 null 再指到新位，避免 unique 衝突。
 
@@ -115,7 +116,7 @@ Route（`src/routes/*.ts`）很薄：解析 body/query → 呼叫 `src/services/
 
 `src/api/client.ts` 是唯一的 fetch 包裝層，注入 operator header。路由（`App.tsx`）用真實路徑；`useEffect` 只在**瀏覽器真的重新載入**時導回 `/dash`（複製 POC「永遠從儀表板開啟」），不影響深連結（例：機台明細「在地圖上定位」→ `/map?kw=...`）。
 
-共用元件改一處即可：`UnitInfo`（入庫／出庫／明細共用的機台資訊）、`UnitDrawer`、`PrintLabelModal`、`BarCode`、`ManualSlotModal`（入庫／出庫共用）、`LogTable`（儀表板／事件紀錄共用）、`Tag`（`AreaTag`、`DutStatusTag`）。
+共用元件改一處即可：`UnitInfo`（入庫／出庫／明細共用的機台資訊）、`UnitDrawer`、`PrintLabelModal`、`BarCode`、`ManualSlotModal`（入庫用；出庫改 `CheckOut.tsx` 內的 `ManualSnModal`）、`LogTable`（儀表板／事件紀錄共用）、`Tag`（`AreaTag`、`DutStatusTag`）。
 
 掃描輸入框是**非受控元件**（`ref`，Enter 後手動清空），對應掃描槍「打字＋Enter」。兩頁在 client 端做 2 秒同碼去重。`useScanFocusGuard` 每 700ms 把焦點拉回刷取框（有 `.mask` 即 modal/drawer 開著、或使用者正在別的 input/select 時不搶）。
 
@@ -123,7 +124,7 @@ Route（`src/routes/*.ts`）很薄：解析 body/query → 呼叫 `src/services/
 
 ## 參考資料
 
-- `OBE_DUT_儲位管理系統_POC_v04.html` —— 規格（事實來源）；`..._POC_v03.html` —— 歷史基準。兩者都留在 repo，不要刪。
+- `OBE_DUT_儲位管理系統_POC_v04-1.html` —— 規格（事實來源），留在 repo，不要刪。`..._POC_v03.html` —— 歷史基準。
 - `Hint.txt` —— 使用者的任務描述。
 - `README.md` —— 設定步驟、API 一覽、v0.3→v0.4 差異、後續正式開發步驟。
 - `docs/DATABASE_SETUP.md`、`docs/DEPLOYMENT.md` —— pgAdmin 4 建庫、遠端 DB、區網部署。

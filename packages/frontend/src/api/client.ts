@@ -6,8 +6,7 @@ import type {
   CheckInCommitResult,
   CheckInSlotResult,
   CheckInUnitResult,
-  CheckOutConfirmResult,
-  CheckOutSlotResult,
+  CheckOutUnitResult,
   DashboardDTO,
   ManualSlotRequest,
   MapFindHit,
@@ -91,8 +90,8 @@ export const api = {
   checkinReject: (slotCode: string, sn: string) => post<{ message: string }>('/checkin/reject', { slotCode, sn }),
   checkinBlockLeft: (slotCode: string, sn: string) => post<{ message: string }>('/checkin/block-left', { slotCode, sn }),
 
-  checkoutScanSlot: (code: string) => post<CheckOutSlotResult>('/checkout/scan-slot', { code }),
-  checkoutConfirm: (slotCode: string) => post<CheckOutConfirmResult>('/checkout/confirm', { slotCode }),
+  checkoutScanUnit: (sn: string) => post<CheckOutUnitResult>('/checkout/scan-unit', { sn }),
+  checkoutManualSn: (sn: string, reason: string) => post<{ sn: string }>('/checkout/manual-sn', { sn, reason }),
 
   manualSlot: (req: ManualSlotRequest) => post<SlotDTO>('/manual-slot', req),
 
