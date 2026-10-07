@@ -17,7 +17,6 @@ interface Msg {
 
 type ModalState =
   | { type: 'OCCUPIED'; slotCode: string }
-  | { type: 'UNKNOWN_SN'; sn: string; message: string }
   | { type: 'LEFT_UNIT'; sn: string; message: string }
   | { type: 'NEED_MOVE_CONFIRM'; sn: string; message: string; currentSlot: SlotLocDTO | null }
   | null;
@@ -129,7 +128,8 @@ export default function CheckIn() {
           if (r.unit) setUnitInfo(r.unit);
           return;
         case 'UNKNOWN_SN':
-          return setModal({ type: 'UNKNOWN_SN', sn: v, message: r.message });
+          // 不跳「未建檔 S/N」確認框，直接臨時建檔並上架（使用者要求）
+          return doCommit(v, 'TEMP_CREATE');
         case 'LEFT_UNIT':
           setReason('');
           return setModal({ type: 'LEFT_UNIT', sn: v, message: r.message });
@@ -160,6 +160,13 @@ export default function CheckIn() {
       const done: Msg[] = [
         { kind: 'ok', title: '✔ 綁定完成', body: `[${r.unit.sn}] → ${r.slot.code}（${r.slot.labelZh}）　${formatDateTime(new Date().toISOString())}` },
       ];
+      if (decision === 'TEMP_CREATE') {
+        done.push({
+          kind: 'warn',
+          title: '已臨時建檔',
+          body: `[${r.unit.sn}] 不在機台主檔，已自動臨時建檔並上架；專案／機種等資料為「待補」，需於 SL2.0 補齊。`,
+        });
+      }
       if (r.crossArea) {
         done.push({
           kind: 'warn',
@@ -179,13 +186,6 @@ export default function CheckIn() {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }
-
-  async function doReject(sn: string) {
-    if (slot) await api.checkinReject(slot.code, sn).catch(() => {});
-    toast('已記錄拒收', 'err');
-    setModal(null);
-    reset();
   }
 
   async function doBlockLeft(sn: string) {
@@ -354,23 +354,6 @@ export default function CheckIn() {
             <br />
             <b>請改刷其他綠燈空櫃位</b>把手上這台放好，先不要卡在這裡。
           </div>
-        </Modal>
-      )}
-
-      {modal?.type === 'UNKNOWN_SN' && (
-        <Modal
-          title="未建檔 S/N"
-          onClose={() => setModal(null)}
-          buttons={[
-            { label: '拒收退回', onClick: () => doReject(modal.sn), disabled: submitting },
-            { label: '臨時建檔並上架', className: 'btn pri', onClick: () => doCommit(modal.sn, 'TEMP_CREATE'), disabled: submitting },
-          ]}
-        >
-          <div className="msg err">
-            <b>{modal.sn} 不在機台主檔</b>
-            {modal.message}
-          </div>
-          <div className="small muted">選「臨時建檔」會列入儀表板的待補清單，由 JQE 於 SL2.0 補齊主檔後才會消失。</div>
         </Modal>
       )}
 
