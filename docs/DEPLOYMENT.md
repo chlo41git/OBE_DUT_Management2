@@ -170,13 +170,108 @@ New-NetFirewallRule -DisplayName "OBE DUT frontend 5173" `
 
 ### 8. 開機自動啟動（建議）
 
-主機重開後、無人登入時也要能使用的話，擇一：
+目標：主機重開機後，**不需要有人登入**，PostgreSQL、backend、frontend 都自動起來。
 
-- **工作排程器**：觸發程序設「開機時」，勾「不論使用者登入與否均執行」，分別排入 backend 與 frontend 的啟動指令（「開始位置」設為對應的 package 目錄）。
-- **PM2**（已照第 6 步 `pm2 start` + `pm2 save`）：PM2 在 Windows 上不會自己開機啟動（`pm2 startup` 不支援 Windows），擇一補上：
-  - 工作排程器：觸發程序「開機時」，勾「不論使用者登入與否均執行」，執行帳號用**當初執行 `pm2 save` 的那個帳號**（PM2 的程序清單存在該帳號的 `%USERPROFILE%\.pm2`），動作為 `pm2 resurrect`（程式填 `pm2.cmd` 的完整路徑，可用 `(Get-Command pm2.cmd).Source` 查）。
-  - 或安裝 [pm2-installer](https://github.com/jessety/pm2-installer)，把 PM2 註冊成 Windows 服務。注意它會用自己的 PM2_HOME，裝好後要在該環境下重新 `pm2 start ecosystem.config.cjs` + `pm2 save`。
-- **NSSM**：把兩個指令包成 Windows 服務，程序崩潰時會自動重啟。
+| 元件 | 誰負責開機啟動 | 要做的事 |
+|---|---|---|
+| PostgreSQL | Windows 服務 `postgresql-x64-18`（官方安裝程式建立） | 確認啟動類型為「自動」（8-1） |
+| backend + frontend | PM2，由工作排程器在開機時執行 `pm2 resurrect` | `pm2 save` ＋ 建立排程工作（8-2、8-3） |
+
+啟動順序不必特別安排：backend 啟動時不會連資料庫，第一個 API 請求進來才連線，所以就算比 PostgreSQL 早起來也不會失敗。
+
+> PM2 在 Windows 上**不會**自己開機啟動（`pm2 startup` 不支援 Windows），一定要做 8-3。
+
+#### 8-1　PostgreSQL：確認服務會自動啟動
+
+資料庫在哪台就在哪台做（系統管理員 PowerShell）：
+
+```powershell
+Get-Service postgresql*            # StartType 要是 Automatic
+# 若不是：
+Set-Service postgresql-x64-18 -StartupType Automatic
+# （建議）服務異常終止時自動重啟：1 分鐘後重試，最多 3 次，一天後重新計數
+sc.exe failure postgresql-x64-18 reset= 86400 actions= restart/60000/restart/60000/restart/60000
+```
+
+服務名稱依版本而異（例：`postgresql-x64-17`），以 `Get-Service postgresql*` 查到的為準。
+
+#### 8-2　PM2：儲存目前的程序清單
+
+`pm2 resurrect` 還原的是**最後一次 `pm2 save` 時**的清單，所以要在兩個程序都正常運作時存檔：
+
+```powershell
+pm2 start ecosystem.config.cjs     # 已經在跑就略過
+pm2 status                         # obe-backend、obe-frontend 都是 online，且沒有其他不要的程序
+pm2 save                           # 寫入 %USERPROFILE%\.pm2\dump.pm2
+```
+
+之後只要增刪 PM2 程序（例如 `pm2 delete`、改名），都要再 `pm2 save` 一次；單純 `pm2 restart` 不用。
+
+#### 8-3　工作排程器：開機時執行 `pm2 resurrect`
+
+**執行帳號必須是執行 `pm2 save` 的那個 Windows 帳號**——PM2 的清單與 log 存在該帳號的 `%USERPROFILE%\.pm2`，換成 SYSTEM 等其他帳號會找不到清單，也可能沒有讀取專案資料夾的權限。該帳號**必須設有登入密碼**（「不論使用者登入與否均執行」需要儲存密碼）。
+
+**方法 A：PowerShell 一次建立（建議）**——以系統管理員身分開 PowerShell，執行時會跳出視窗要求輸入該帳號的 Windows 密碼：
+
+```powershell
+$pm2      = (Get-Command pm2.cmd).Source            # 例：C:\Users\<帳號>\AppData\Roaming\npm\pm2.cmd
+$action   = New-ScheduledTaskAction -Execute $pm2 -Argument 'resurrect'
+$trigger  = New-ScheduledTaskTrigger -AtStartup
+$trigger.Delay = 'PT1M'                             # 開機後延遲 1 分鐘，等網路與 PostgreSQL 就緒
+$settings = New-ScheduledTaskSettingsSet `
+              -ExecutionTimeLimit ([TimeSpan]::Zero) `
+              -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+              -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+$cred     = Get-Credential -UserName (whoami) -Message '輸入此帳號的 Windows 登入密碼'
+Register-ScheduledTask -TaskName 'OBE DUT - PM2 resurrect' `
+  -Action $action -Trigger $trigger -Settings $settings `
+  -User $cred.UserName -Password $cred.GetNetworkCredential().Password -RunLevel Highest
+```
+
+- `-ExecutionTimeLimit 0`：取消「執行超過 3 天就停止工作」的預設，避免排程器終止工作時連帶影響 PM2。
+- 用 Microsoft 帳號登入 Windows 時，`whoami` 顯示的帳號名稱照用即可，密碼填 Microsoft 帳號密碼（不是 PIN）。
+
+**方法 B：GUI**——開「工作排程器」→ 右側「建立工作…」（不要用「建立基本工作」）：
+
+| 頁籤 | 設定 |
+|---|---|
+| 一般 | 名稱 `OBE DUT - PM2 resurrect`；「變更使用者或群組」選執行 `pm2 save` 的帳號；勾 **不論使用者登入與否均執行**；勾 **以最高權限執行** |
+| 觸發程序 | 新增 →「開始工作」選 **啟動時**；勾 **延遲工作的時間：1 分鐘** |
+| 動作 | 新增 →「啟動程式」；程式填 `pm2.cmd` 完整路徑（`(Get-Command pm2.cmd).Source` 查）；引數填 `resurrect` |
+| 條件 | 取消勾選「只有在電腦使用 AC 電源時才啟動工作」 |
+| 設定 | **取消**勾選「如果工作執行超過下列時間，便停止工作」；勾「如果工作失敗，每隔 1 分鐘重新啟動，最多 3 次」 |
+
+按「確定」後會要求輸入該帳號密碼。
+
+#### 8-4　驗證
+
+先不重開機，手動觸發一次：
+
+```powershell
+pm2 kill                                          # 停掉 PM2 與兩個程序，模擬剛開機
+Start-ScheduledTask -TaskName 'OBE DUT - PM2 resurrect'
+Start-Sleep 10; pm2 status                        # 兩個程序都應回到 online
+Get-ScheduledTaskInfo -TaskName 'OBE DUT - PM2 resurrect' | Select-Object LastRunTime, LastTaskResult   # 0 = 成功
+```
+
+再實際**重開機、不要登入**，從另一台機台開 `http://<APP_HOST>:5173/dash`，儀表板有資料即完成。之後登入確認：
+
+```powershell
+Get-Service postgresql*      # Running
+pm2 status                   # 兩個都是 online，uptime ≈ 開機後經過的時間
+```
+
+#### 8-5　疑難排解
+
+| 症狀 | 原因與處理 |
+|---|---|
+| 重開機後 `pm2 status` 是空的 | 沒做 `pm2 save`，或排程工作的執行帳號與執行 `pm2 save` 的帳號不同 → 8-2、8-3 |
+| `LastTaskResult` 非 0 | 工作排程器左側「工作排程器程式庫」找到該工作 →「歷程記錄」頁籤看錯誤；常見為密碼變更後未更新（工作 → 內容 → 確定，重新輸入密碼） |
+| Windows 密碼改過之後就不會自動啟動 | 排程工作存的是舊密碼 → 同上重新輸入 |
+| 只有 frontend 起來，頁面一直「載入中」 | backend 崩潰 → `pm2 logs obe-backend --lines 50`；資料庫連不上就 `npm run db:check` |
+| 改用了 pm2-installer 等其他方式 | 同時存在兩套 PM2 會互搶 5173／4000 → 只保留一種，刪除本排程工作：`Unregister-ScheduledTask -TaskName 'OBE DUT - PM2 resurrect'` |
+
+> 替代方案：[pm2-installer](https://github.com/jessety/pm2-installer) 可把 PM2 註冊成 Windows 服務。它以 Local Service 帳號執行、使用自己的 PM2_HOME（`C:\ProgramData\pm2`），專案放在使用者資料夾（例如桌面）時可能沒有讀取權限，需要另外調整 —— 一般情況用上面的工作排程器即可。
 
 ### 9. 固定 IP
 
