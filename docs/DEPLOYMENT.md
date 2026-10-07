@@ -225,23 +225,65 @@ $settings = New-ScheduledTaskSettingsSet `
 $cred     = Get-Credential -UserName (whoami) -Message '輸入此帳號的 Windows 登入密碼'
 Register-ScheduledTask -TaskName 'OBE DUT - PM2 resurrect' `
   -Action $action -Trigger $trigger -Settings $settings `
-  -User $cred.UserName -Password $cred.GetNetworkCredential().Password -RunLevel Highest
+  -User $cred.UserName -Password $cred.GetNetworkCredential().Password -RunLevel Limited
 ```
 
 - `-ExecutionTimeLimit 0`：取消「執行超過 3 天就停止工作」的預設，避免排程器終止工作時連帶影響 PM2。
+- `-RunLevel Limited`（**不要**用 `Highest`）：PM2 daemon 的權限要和平常操作 `pm2` 的終端機一致。daemon 若以系統管理員權限啟動，之後在一般 PowerShell 執行 `pm2 status` 會連不上它（`connect EPERM \\.\pipe\rpc.sock`）。
 - 用 Microsoft 帳號登入 Windows 時，`whoami` 顯示的帳號名稱照用即可，密碼填 Microsoft 帳號密碼（不是 PIN）。
 
 **方法 B：GUI**——開「工作排程器」→ 右側「建立工作…」（不要用「建立基本工作」）：
 
 | 頁籤 | 設定 |
 |---|---|
-| 一般 | 名稱 `OBE DUT - PM2 resurrect`；「變更使用者或群組」選執行 `pm2 save` 的帳號；勾 **不論使用者登入與否均執行**；勾 **以最高權限執行** |
+| 一般 | 名稱 `OBE DUT - PM2 resurrect`；「變更使用者或群組」選執行 `pm2 save` 的帳號；勾 **不論使用者登入與否均執行**；**不要**勾「以最高權限執行」（理由同上） |
 | 觸發程序 | 新增 →「開始工作」選 **啟動時**；勾 **延遲工作的時間：1 分鐘** |
 | 動作 | 新增 →「啟動程式」；程式填 `pm2.cmd` 完整路徑（`(Get-Command pm2.cmd).Source` 查）；引數填 `resurrect` |
 | 條件 | 取消勾選「只有在電腦使用 AC 電源時才啟動工作」 |
 | 設定 | **取消**勾選「如果工作執行超過下列時間，便停止工作」；勾「如果工作失敗，每隔 1 分鐘重新啟動，最多 3 次」 |
 
 按「確定」後會要求輸入該帳號密碼。
+
+**方法 C：帳號沒有設密碼時（自動登入 ＋ 登入時執行）**
+
+「不論使用者登入與否均執行」必須儲存密碼，空白密碼的帳號無法使用方法 A/B。替代做法是讓 Windows 開機後**自動登入**該帳號，排程工作改成「使用者登入時」觸發（不需要密碼）。
+
+1. 設定自動登入（系統管理員 PowerShell；`14_P` 換成實際帳號）：
+
+   ```powershell
+   $wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+   Set-ItemProperty $wl AutoAdminLogon    '1'
+   Set-ItemProperty $wl DefaultUserName   '14_P'
+   Set-ItemProperty $wl DefaultDomainName $env:COMPUTERNAME
+   Set-ItemProperty $wl DefaultPassword   ''          # 空白密碼
+   ```
+
+   主機上有多個帳號時，沒有這一步就會停在選擇帳號的畫面，不會自動登入。
+
+2. 建立排程工作（**用執行 `pm2 save` 的那個帳號**開一般 PowerShell 即可，不需系統管理員）：
+
+   ```powershell
+   $me       = whoami
+   $pm2      = (Get-Command pm2.cmd).Source
+   $action   = New-ScheduledTaskAction -Execute $pm2 -Argument 'resurrect'
+   $trigger  = New-ScheduledTaskTrigger -AtLogOn -User $me
+   $trigger.Delay = 'PT30S'
+   $settings = New-ScheduledTaskSettingsSet `
+                 -ExecutionTimeLimit ([TimeSpan]::Zero) `
+                 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+                 -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+   $principal = New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive -RunLevel Limited
+   Register-ScheduledTask -TaskName 'OBE DUT - PM2 resurrect' `
+     -Action $action -Trigger $trigger -Settings $settings -Principal $principal
+   ```
+
+   若提示「存取被拒」，改用系統管理員 PowerShell 執行同一段（`$me` 仍須是該帳號，`-RunLevel Limited` 不變）。
+
+注意事項：
+
+- PM2 與兩個程序跑在這個登入工作階段裡：**可以鎖定畫面（Win+L），不能「登出」**——登出會結束 PM2，系統就停了。切換到其他帳號（例如 `TEST`）時用「切換使用者」，不要登出。
+- 自動登入代表任何人開機就能直接操作桌面；這台同時對區網提供網頁與資料庫，長期仍建議設密碼後改用方法 A。
+- 之後若替帳號設了密碼，Windows 可能會自動關閉 `AutoAdminLogon`；屆時改用方法 A，或重新設定自動登入（`DefaultPassword` 填新密碼）。
 
 #### 8-4　驗證
 
