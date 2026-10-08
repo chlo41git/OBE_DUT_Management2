@@ -140,7 +140,7 @@ DATABASE_URL="postgresql://obe:CHANGE_ME@localhost:5432/obe_dut_v04?schema=publi
 npm install            # 尚未安裝過依賴的話
 npm run db:check       # 自檢：連線／權限／migration 狀態，會指出下一步
 npm run db:migrate     # prisma migrate dev，建立所有資料表
-npm run db:seed        # 產生 6 分區 / 34 台車 / 約 400 台機台的示範資料
+npm run db:seed        # 產生 WIP 24 + FIN 12 台車 / 1,584 儲位 / 1,000 台機台，全部空位（綠燈）
 npm run db:check       # 再跑一次確認
 ```
 

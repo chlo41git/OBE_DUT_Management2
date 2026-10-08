@@ -4,6 +4,11 @@
  * Uses the POC's LCG (seed 20260905) so every run produces the same data set;
  * dates are relative to "now" instead of the POC's fixed 2026/09/04.
  *
+ * 預設產生「空倉」：所有儲位為空位（綠燈，無停用），1,000 台機台皆為 NEW、未綁儲位，無異動紀錄。
+ * 要 POC 的示範佔位（約 950 台在架、40 台出庫、約 3% 停用儲位與對應異動紀錄）：
+ *   PowerShell： $env:SEED_DEMO_OCCUPANCY='1'; npm run db:seed; Remove-Item Env:SEED_DEMO_OCCUPANCY
+ * 兩種模式的亂數流程相同，所以機台 S/N 與屬性一致。
+ *
  * DESTRUCTIVE: clears every table first.
  */
 import { PrismaClient, type IssueStatus, type UnitState } from '@prisma/client';
@@ -39,6 +44,7 @@ const ISSUE_POOL: [string, string, string, string][] = [
 ];
 const UNIT_COUNT = 1000;
 const OUT_COUNT = 40;
+const DEMO_OCCUPANCY = process.env.SEED_DEMO_OCCUPANCY === '1';
 
 // ---- POC RNG helpers ----
 let seed = 20260905;
@@ -223,8 +229,22 @@ async function main() {
     moves.push({ sn: u.sn, fromSlot: null, toSlot: k, action: '入庫上架', empNo: e[0], empName: e[1], note: '人員自選櫃位', ts: u.inAt });
   }
 
+  // 空倉模式：上面照常跑完（亂數序列不變），寫入前清掉所有放置狀態
+  if (!DEMO_OCCUPANCY) {
+    slots.forEach((s) => {
+      s.status = 'EMPTY';
+      s.blockReason = s.blockBy = s.blockAt = undefined;
+    });
+    moves.length = 0;
+  }
+  const unitData = units.map(({ issues: _i, ...u }) =>
+    DEMO_OCCUPANCY
+      ? u
+      : { ...u, state: 'NEW' as const, slotCode: null, inAt: null, lastMoveAt: null, lastMoveBy: null, loanBy: null, loanOutAt: null },
+  );
+
   await prisma.slot.createMany({ data: slots.map(({ areaCode: _a, ...s }) => s) });
-  await prisma.unit.createMany({ data: units.map(({ issues: _i, ...u }) => u) });
+  await prisma.unit.createMany({ data: unitData });
   await prisma.unitIssue.createMany({ data: units.flatMap((u) => u.issues.map((i) => ({ ...i, unitSn: u.sn }))) });
 
   moves.sort((a, b) => a.ts.getTime() - b.ts.getTime());
@@ -233,9 +253,9 @@ async function main() {
   // POC SCAN = {covered:1268, missed:41}
   await prisma.scanMetric.create({ data: { date: daysAgo(1), station: 'OBE-STN01', scannedCnt: 1268, missedCnt: 41 } });
 
-  const inCnt = units.filter((u) => u.state === 'IN').length;
+  const inCnt = unitData.filter((u) => u.state === 'IN').length;
   console.log(
-    `Done: ${AREA_DEFS.reduce((n, a) => n + a.rackCount, 0)} racks, ${slots.length} slots ` +
+    `Done (${DEMO_OCCUPANCY ? 'demo occupancy' : 'empty storage'}): ${AREA_DEFS.reduce((n, a) => n + a.rackCount, 0)} racks, ${slots.length} slots ` +
       `(${slots.filter((s) => s.status === 'BLOCKED').length} blocked), ${units.length} units (${inCnt} in storage), ${moves.length} movements.`,
   );
 }

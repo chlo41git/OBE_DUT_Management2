@@ -43,7 +43,7 @@ cp packages/backend/.env.example packages/backend/.env   # 已建好的話略過
 
 npm run db:check            # 連線／權限自檢
 npm run db:migrate          # prisma migrate dev（obe 需 CREATEDB）
-npm run db:seed             # 36 台車 / 1,584 儲位 / 1,000 台機台（會先清空所有資料表）
+npm run db:seed             # 36 台車 / 1,584 儲位 / 1,000 台機台，全部空位（會先清空所有資料表；示範佔位見 seed.ts 開頭說明）
 
 npm run dev:backend         # http://localhost:4000
 npm run dev:frontend        # http://localhost:5173（/api 代理到 4000）

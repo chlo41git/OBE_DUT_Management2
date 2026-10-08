@@ -27,7 +27,7 @@ npm workspaces monorepo：
 npm install                          # 根目錄，安裝所有 workspace
 npm run db:check                     # 連線／權限／migration 自檢
 npm run db:migrate                   # prisma migrate dev（在 packages/backend 執行）
-npm run db:seed                      # 36 台車 / 1,584 儲位 / 1,000 台機台（破壞性：先清空所有資料表；使用 POC 的固定亂數種子，每次結果相同）
+npm run db:seed                      # 36 台車 / 1,584 儲位 / 1,000 台機台，預設空倉（全空位、機台皆 NEW）；SEED_DEMO_OCCUPANCY=1 才放入 POC 示範佔位（破壞性：先清空所有資料表；使用 POC 的固定亂數種子，每次結果相同）
 npm run dev:backend                  # tsx watch，http://localhost:4000
 npm run dev:frontend                 # vite，http://localhost:5173，代理 /api -> :4000
 npm run build                        # shared -> backend（先 prisma generate 再 tsc）-> frontend
